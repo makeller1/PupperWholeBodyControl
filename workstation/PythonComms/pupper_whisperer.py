@@ -1,6 +1,9 @@
+# Class used to communicate with pupper through run_djipupper.py
+# It transforms the order and sign of current/torque lists to be compatible between 
+# WBC and low-level motor control
+
 class whisperer:
     def __init__(self):
-        # Class used to communicate with pupper through run_djipupper.py
 
         # robot_states is a dictionary with the following keys:
         # ts : current time 1x1
