@@ -1,0 +1,14 @@
+joint 'base'     XYZ, Q1,Q2,Q3        type = floating q: 0-5
+joint 'back_left_hip_joint'           type = 1    q: 6
+joint 'back_left_shoulder_joint'      type = 1    q: 7
+joint 'back_left_elbow_joint'         type = 1    q: 8
+joint 'back_right_hip_joint'          type = 1    q: 9
+joint 'back_right_shoulder_joint'     type = 1    q: 10
+joint 'back_right_elbow_joint'        type = 1    q: 11
+joint 'front_left_hip_joint'          type = 1    q: 12
+joint 'front_left_shoulder_joint'     type = 1    q: 13
+joint 'front_left_elbow_joint'        type = 1    q: 14
+joint 'front_right_hip_joint'         type = 1    q: 15
+joint 'front_right_shoulder_joint'    type = 1    q: 16
+joint 'front_right_elbow_joint'       type = 1    q: 17
+joint 'base' Q4 (4th element of quat)             q: 18

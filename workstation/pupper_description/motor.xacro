@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+
+<robot name = "motorXacro" xmlns:xacro="http://www.ros.org/wiki/xacro">
+    
+    <xacro:macro name = "motor" params = "name axis fixed_parent revolute_child *fixed_origin *revolute_origin">
+
+        <xacro:property name = "motorRad"    value = "0.012"/>
+        <xacro:property name = "motorLength" value = "0.03"/>
+        <xacro:property name = "motorMass"   value = "0.09"/> <!-- kg --> 
+
+        <!-- Create the motor -->
+        <link name = "${name}_motor">
+            <inertial>
+                <mass value = "0.12"/>
+                <inertia ixx = "7.2e-6" iyy = "1.11e-5" izz = "1.11e-5" ixy = "0" ixz = "0" iyz = "0"/>
+            </inertial>
+
+            <xacro:if value = "${full_urdf}">
+            <visual name = "${name}_visual">
+                <material name = "motorColor">
+                    <color rgba = "0 1 0 1"/>
+                </material>
+                <geometry>
+                    <cylinder radius = "${motorRad}" length = "${motorLength}"/>
+                </geometry>
+            </visual>
+
+            <collision name = "${name}_collision">
+                <geometry>
+                    <cylinder radius = "${motorRad}" length = "${motorLength}"/>
+                </geometry>
+            </collision>
+            </xacro:if>
+        </link>
+
+        <!-- Rigidly attach to motor to it's parent -->
+        <joint name = "${name}_fixed_joint" type = "fixed">
+            <parent link = "${fixed_parent}"/>
+            <child  link = "${name}_motor"/>
+            <xacro:insert_block name = "fixed_origin"/>
+        </joint>
+
+        <!-- Attach the child link through a revolute joint -->
+        <joint name = "${name}_joint" type = "revolute">
+            <parent link = "${fixed_parent}"/>
+            <!-- <parent link = "${name}_motor"/> -->
+            <child  link = "${revolute_child}"/>
+            <xacro:insert_block name = "revolute_origin"/>
+            <limit upper = "1e10" lower = "-1e10" effort = "1e6" velocity = "1e6"/>
+            <dynamics damping = "0.2" friction = "0.3"/>
+            <axis xyz = "${axis}"/>
+        </joint>
+
+        <xacro:if value = "${full_urdf}">
+        <!-- implicitSpringDamper: prevent crashing when damping is set -->
+        <!-- provideFeedback     : allows the joint to publish torque data -->
+        <gazebo reference = "${name}_joint">
+            <physics>
+                <ode>
+                    <max_force>50</max_force>
+                </ode>
+            </physics>
+            <provideFeedback>true</provideFeedback>
+            <implicitSpringDamper>true</implicitSpringDamper>
+        </gazebo>
+
+        <gazebo reference = "${revolute_child}">
+            <self_collide>false</self_collide>
+        </gazebo>
+        </xacro:if>
+
+    </xacro:macro>
+
+</robot>

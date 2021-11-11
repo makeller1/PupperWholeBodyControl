@@ -1,0 +1,31 @@
+<sdf version="1.6">
+    <world name="pupper_world">
+        <include>
+            <uri>model://sun</uri>
+        </include>
+
+        <include>
+			<uri>model://ground_plane</uri>
+		</include>
+
+        <physics name="ode_100iters" type="ode" default="true">
+            <type>ode</type>
+            <!-- <max_step_size>0.001</max_step_size> -->
+            <real_time_update_rate>1000</real_time_update_rate>
+            <ode>
+                <solver>
+                    <!-- <min_step_size>0.001</min_step_size> -->
+                    <type>quick</type>
+                    <iters>200</iters>
+                    <sor>0.4</sor>
+                    <!-- <friction_model>box_model</friction_model> -->
+                </solver>
+
+                <constraints>
+                    <contact_max_correcting_vel>0</contact_max_correcting_vel>
+                    <contact_surface_layer>0.001</contact_surface_layer>
+                </constraints>
+            </ode>
+        </physics>
+    </world>
+</sdf>
