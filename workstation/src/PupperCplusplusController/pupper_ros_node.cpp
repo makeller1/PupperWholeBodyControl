@@ -2,8 +2,8 @@
 #include "sensor_msgs/JointState.h"
 #include "std_msgs/Float64MultiArray.h"
 #include "geometry_msgs/Pose.h"
-#include "ase389/PupperModel.h"
-#include "ase389/PupperWBC.hpp"
+#include "workstation/PupperModel.h"
+#include "workstation/PupperWBC.hpp"
 
 using std::array;
 

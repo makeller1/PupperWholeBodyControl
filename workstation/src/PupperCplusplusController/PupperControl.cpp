@@ -1,7 +1,7 @@
 #include <iostream>
-#include "ase389/PupperWBC.hpp"
-#include "ase389/PupperModel.h"
-#include "ase389/PupperUrdfString.hpp"
+#include "workstation/PupperWBC.hpp"
+#include "workstation/PupperModel.h"
+#include "workstation/PupperUrdfString.hpp"
 
 using std::array;
 using std::cout;

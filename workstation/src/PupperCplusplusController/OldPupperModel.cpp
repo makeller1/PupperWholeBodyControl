@@ -2,7 +2,7 @@
 // It has been updated to reflect the actual robot more closely.
 
 #include <iostream>
-#include "ase389/PupperModel.h"
+#include "workstation/PupperModel.h"
 
 using std::cout;
 using std::endl;

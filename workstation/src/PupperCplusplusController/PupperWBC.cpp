@@ -1,7 +1,7 @@
 #include <chrono>
 #include <memory>
 #include <iostream>
-#include "ase389/PupperWBC.hpp"
+#include "workstation/PupperWBC.hpp"
 #include "rbdl/addons/urdfreader/urdfreader.h"
 
 using std::vector;
