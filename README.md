@@ -33,3 +33,14 @@ Assuming you have the ros distro noetic,
 ```
 sudo apt install ros-noetic-gazebo-ros
 ```
+# Building the WBC C++ code
+1. Navigate to ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/plugins
+2. Create a folder called build
+	```
+	mkdir build
+	```
+3. Run
+	```
+	cmake ..
+	make -j
+	```
