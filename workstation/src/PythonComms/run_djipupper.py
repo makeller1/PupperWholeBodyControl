@@ -261,7 +261,7 @@ def main(FLAGS):
                     # else:
                     # WBC_commands_reordered[i] = 1/0.179 * (torque_cmd + 0.0136 * np.sign(vel) + 0.00494 * vel)
                         # print("Motor ", i, " B")
-                    # print("Curent ", i, ": {:+.3f}".format(WBC_commands_reordered[i]))
+                    # print("Current ", i, ": {:+.3f}".format(WBC_commands_reordered[i]))
                     # if vel * torque_cmd > 0:
                     #     print("B")
                 #Set_torque actually sets currents

@@ -3,3 +3,4 @@ onboard/lib/ros_lib/
 onboard/.gitignore
 **/build
 **/devel
+*.code-workspace
