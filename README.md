@@ -21,7 +21,9 @@ The catkin workspace is used to compile the C++ code
 	```
 4. Move repo code to  WBC_catkin_ws/src
 5. Run one more time:
-	```catkin build```
+	```
+	catkin build
+	```
 6. Source the catkin workspace by adding the following line to ~/.bashrc (hidden file in your home directory)
 	```bash
 	source /home/user/WBC_catkin_ws/devel/setup.bash # Allows ros to find the specific executable inside the package
