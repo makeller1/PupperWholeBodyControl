@@ -34,7 +34,7 @@ Assuming you have the ros distro noetic,
 sudo apt install ros-noetic-gazebo-ros
 ```
 # Building the WBC C++ code
-1. Navigate to ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/plugins
+1. Open a terminal and navigate to ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/plugins
 2. Create a folder called build
 	```
 	mkdir build
@@ -47,7 +47,26 @@ sudo apt install ros-noetic-gazebo-ros
 	```
 # Running WBC in simulation
 1. Build the WBC C++ code using the steps above
-2. Run
+2. Open a terminal and run
 	```
 	roslaunch workstation load_pupper.launch
 	```
+# Running WBC on Pupper
+1. Start ros by opening a terminal and running
+	```
+	roscore
+	```
+2. Start the python code that communicates with the keyboard controller, C++ code, and the pupper. Open a new terminal and enter
+	```
+	cd ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/src
+	python3 run_djipupper.py 
+	```
+	
+# Building and uploading the Teensy code
+1. Open VS code
+2. Install the PlatformIO extension
+3. Open the PlatformIO tab and select "Open"
+4. Select "Add Existing"
+5. Navigate to the folder src/onboard
+6. Select Open "onboard"
+7. In the PlatformIO tab, select Project Tasks> teensy40 > Build 
