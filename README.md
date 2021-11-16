@@ -9,8 +9,9 @@ Note: You will need an SSH key on your GitHub profile. See: https://docs.github.
 # Setting up Catkin Workspace
 The catkin workspace is used to compile the C++ code
 1. Create folder for catkin workspace
-2. Add new folder called src
-     e.g. WBC_catkin_ws/src
+	e.g. WBC_catkin_ws
+3. Add new folder called src
+	e.g. WBC_catkin_ws/src
 3. In a terminal enter:
 	```
 	sudo apt update
@@ -20,7 +21,11 @@ The catkin workspace is used to compile the C++ code
 	```
 4. Move repo code to  WBC_catkin_ws/src
 5. Run one more time:
-	$ catkin build
+	```catkin build```
+6. Source the catkin workspace by adding the following line to ~/.bashrc (hidden file in your home directory)
+	```bash
+	source /home/user/WBC_catkin_ws/devel/setup.bash # Allows ros to find the specific executable inside the package
+	```
 # Installing gazebo_ros
 Assuming you have the ros distro noetic,
 ```
