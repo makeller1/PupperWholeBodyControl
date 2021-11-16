@@ -41,6 +41,7 @@ sudo apt install ros-noetic-gazebo-ros
 	```
 3. Run
 	```
+	cd build
 	cmake ..
 	make -j
 	```
