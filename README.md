@@ -9,7 +9,7 @@ Note: You will need an SSH key on your GitHub profile. See: https://docs.github.
 # Setting up Catkin Workspace
 1. Create folder for catkin workspace
 2. Add new folder called src
-     i.e. WBC_catkin_ws/src
+     e.g. WBC_catkin_ws/src
 3. In a terminal enter:
 	$ sudo apt update
  	$ sudo apt install python3-catkin-tools
