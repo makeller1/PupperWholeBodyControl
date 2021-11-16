@@ -45,3 +45,9 @@ sudo apt install ros-noetic-gazebo-ros
 	cmake ..
 	make -j
 	```
+# Running WBC in simulation
+1. Build the WBC C++ code using the steps above
+2. Run
+	```
+	roslaunch workstation load_pupper.launch
+	```
