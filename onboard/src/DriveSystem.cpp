@@ -5,19 +5,17 @@
 
 #include "Utils.h"
 
-DriveSystem::DriveSystem() : front_bus_(), rear_bus_() {
-  // Serial << "DriveSystem::DriveSystem() initializer is setting control mode to idle" << endl;
-  //control_mode_ = DriveControlMode::kIdle; // - mathew
+DriveSystem::DriveSystem() : front_bus_(), rear_bus_() 
+{
   control_mode_ = DriveControlMode::kTorqueControl; // - mathew
-  fault_current_ = 10.0;  // N  TODO: don't make this so high at default
-  // fault_position_ = 3.5; // 3.5// rad // TODO: make this a param - mathew
-  fault_position_array_[0] = 9999999; // PI/4 fault_positions for each joint (hip, shoulder, elbow, for all legs) - mathew
-  fault_position_array_[1] = 9999999; //5.0;
-  fault_position_array_[2] = 9999999; //5.0;
+  fault_current_ = 10.0; // Violation sets control mode to kError
+  fault_position_array_[0] = PI/4; // PI/4 fault_positions for each joint (hip, shoulder, elbow, for all legs) - mathew
+  fault_position_array_[1] = 5.0; //5.0;
+  fault_position_array_[2] = 5.0; //5.0;
 
   fault_velocity_ =
-      10.0;  // TODO: make this a param, set to something more reasonable.
-  max_current_ = 4.0;
+      10.0;  // TODO: Determine if this is reasonable
+  max_current_ = 4.0; // Saturates current command
   velocity_reference_.fill(0.0);
   current_reference_.fill(
       0.0);  // TODO: log the commanded current even when in position PID mode
@@ -41,12 +39,14 @@ DriveSystem::DriveSystem() : front_bus_(), rear_bus_() {
 
 }
 
-void DriveSystem::CheckForCANMessages() {
+void DriveSystem::CheckForCANMessages() 
+{
   front_bus_.PollCAN();
   rear_bus_.PollCAN();
 }
 
-DriveControlMode DriveSystem::CheckErrors() {
+DriveControlMode DriveSystem::CheckErrors() 
+{
   // for (size_t i = 0; i < kNumActuators; i++) {
   //   // check positions
   //   if (abs(GetActuatorPosition(i)) > fault_position_) {
@@ -62,42 +62,41 @@ DriveControlMode DriveSystem::CheckErrors() {
   //   }
   // }
   // check position of each motor
-    for (size_t i = 0; i < 4; i++) {
+    for (size_t i = 0; i < 4; i++) 
+    {
       if (abs(GetActuatorPosition(i*3)) > fault_position_array_[0] || 
           abs(GetActuatorPosition(i*3 + 1)) > fault_position_array_[1] ||
           abs(GetActuatorPosition(i*3 + 2)) > fault_position_array_[2]){
         // Serial << "Leg[" << i << "] hit fault position: " << fault_position_ << endl;
         return DriveControlMode::kError;
       }
-
     }
   //Serial << "CheckError() was called and that sets motors idle" << endl; // - mathew
   //return DriveControlMode::kIdle; // This shouldn't be called just for checking errors, right?
   return control_mode_; // - mathew
 }
 
-void DriveSystem::SetIdle() { 
+void DriveSystem::SetIdle() 
+{ 
   // Serial << "SetIdle() was called - mathew" << endl; 
   //control_mode_ = DriveControlMode::kIdle; 
-  }
+}
 
-void DriveSystem::ZeroCurrentPosition() {
+void DriveSystem::ZeroCurrentPosition() 
+{
   zero_position_ = GetRawActuatorPositions();
 }
 
-void DriveSystem::SetQuaternions(float q0, float q1, float q2, float q3){
+void DriveSystem::SetQuaternions(float q0, float q1, float q2, float q3)
+{
   q0_ = q0;
   q1_ = q1;
   q2_ = q2;
   q3_ = q3;
 }
 
-void DriveSystem::SetCurrent(uint8_t i, float current_reference) {
-  // control_mode_ = DriveControlMode::kCurrentControl; // Why would we change control mode here - mathew
-  current_reference_[i] = current_reference;
-}
-
-void DriveSystem::SetFaultCurrent(float fault_current) {
+void DriveSystem::SetFaultCurrent(float fault_current) 
+{
   fault_current_ = fault_current;
 }
 
@@ -105,14 +104,19 @@ void DriveSystem::SetMaxCurrent(float max_current) {
   max_current_ = max_current;
 }
 
-void DriveSystem::SetTorques(BLA::Matrix<12> torques) { // mathew
-  control_mode_ = DriveControlMode::kTorqueControl;
+void DriveSystem::SetTorqueControl()
+{
+  control_mode_ = DriveControlMode::kTorqueControl; // Remove this so we stay in other control modes despite commands being sent
+}
+
+void DriveSystem::SetTorques(BLA::Matrix<12> torques) 
+{ 
   torques_ = torques; // commanded torques
 }
 
-BLA::Matrix<12> DriveSystem::TorqueControl() { // - mathew
-  // Converts torques_ to currents, obeying current limit
-  // using actuator_torques
+BLA::Matrix<12> DriveSystem::TorqueControl() 
+{ 
+  // Converts torques_ to currents, obeying current limit using actuator_torques
 
   // Convert torques to currents
   BLA::Matrix<12> motor_currents;
@@ -121,7 +125,7 @@ BLA::Matrix<12> DriveSystem::TorqueControl() { // - mathew
   for (int i=0; i<12; i++){
     motor_currents(i) = 1.0 * torques_(i); // TODO : Find out if we need to convert torque to current or does C610 do that
   }
-  // Note: motor_currents are constrained in command_current to +-max_current_
+  // Note: motor_currents are constrained in command_current to max_current_
 
   return motor_currents;
 }
@@ -140,11 +144,6 @@ void DriveSystem::Update() {
       CommandIdle();
       break;
     }
-    // case DriveControlMode::kIdle: {
-    //   Serial << "DriveControlMode is in idle case" << endl;
-    //   CommandIdle();
-    //   break;
-    // }
     case DriveControlMode::kTorqueControl: 
     {
       //Serial << "Control Mode: " << "kTorqueControl" << endl;

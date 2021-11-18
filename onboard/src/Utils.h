@@ -26,16 +26,6 @@ class Utils {
   static std::array<int32_t, N> ConvertToFixedPoint(std::array<float, N> in,
                                                     float factor);
 
-  /*
-  Return the infinity norm of a 3-vector
-  */
-  static float InfinityNorm3(BLA::Matrix<3> vec);
-
-  /*
-  Construct a 3x3 diagonal matrix from a provided 3-vector.
-  */
-  static BLA::Matrix<3, 3> DiagonalMatrix3x3(BLA::Matrix<3> diag);
-
   template <int N, size_t UN>
   static std::array<float, UN> VectorToArray(BLA::Matrix<N> vec);
 

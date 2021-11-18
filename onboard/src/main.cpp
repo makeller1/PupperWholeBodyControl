@@ -6,21 +6,17 @@
 #include "Utils.h"
 #include "ICM_20948.h"
 
-////////////////////// CONFIG ///////////////////////
 const int CONTROL_DELAY = 1000;//1000;  // micros - mathew (Setting this to 10 results in CAN error)
 const int OBSERVE_DELAY = 1000;//1000; // micros
-const float MAX_CURRENT = .5; // Amps - Default value, is changed by run_djipupper - mathew
+const float MAX_CURRENT = 1.0; // Amps - Default saturation value, is changed by run_djipupper
 
-bool print_robot_states = true; // This is needed to send motor / IMU data over serial - mathew
+const bool send_robot_states = true; // This is needed to send motor / IMU data over serial - mathew
 
 bool print_debug_info = false; 
-
-PDGains DEFAULT_GAINS = {8.0, 2.0};
 
 const bool ECHO_COMMANDS = false; // false; Set true for debugging - mathew
 const bool AHRS_ENABLED = false; // Are we running with the AHRS/IMU enabled?
 
-////////////////////// END CONFIG ///////////////////////
 ////////////////////// SETUP IMU ////////////////////////
 #define WIRE_PORT Wire
 #define AD0_VAL   1     // The value of the last bit of the I2C address. 
@@ -28,7 +24,7 @@ const bool AHRS_ENABLED = false; // Are we running with the AHRS/IMU enabled?
                         // the ADR jumper is closed the value becomes 0
 ICM_20948_I2C myICM;  //create an ICM_20948_I2C object
 
-// constants
+// To do: Translate calibration routine to C++ and write values to EEPROM
 // magnetometer bias: corrected_i = measurement_i - bias_i (units: uT)
 const float bx = 63.4891;
 const float by = .2232;
@@ -118,7 +114,8 @@ void setup(void) {
   last_print_ts = millis();
   last_header_ts = millis();
 
-  ////////////// Runtime config /////////////////////
+  // Runtime config
+  drive.SetActivations({1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
   drive.SetMaxCurrent(MAX_CURRENT);
   options.delimiter = ',';
   options.positions = true;
@@ -128,22 +125,15 @@ void setup(void) {
     options.quaternion = false;
   }
 
-  // Set behavioral options
-  drive.SetIdle();
-
   interpreter.Flush();
-
-  // Activating the motors on bootup is dumb but it allows you to see debug
-  // information
-  drive.SetActivations({1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
-  drive.SetMaxCurrent(1.0);
+  drive.SetTorqueControl(); // Redundant since this occurs in drive initialization, but good to keep in mind
   drive.ZeroCurrentPosition();
   BLA::Matrix<12> torques_start = {0,0,0,0,0,0,0,0,0,0,0,0};
   drive.SetTorques(torques_start); // This also puts control mode in torque control
-
 }
 
-void loop() {
+void loop() 
+{
   drive.CheckForCANMessages();
   CheckResult r = interpreter.CheckForMessages();
   if (r.flag == CheckResultFlag::kNewCommand) {
@@ -156,6 +146,10 @@ void loop() {
         Serial << "Torque command: "
                << interpreter.LatestTorqueCommand();
       }
+    }
+    if (r.trq_mode_set)
+    {
+      drive.SetTorqueControl();
     }
     if (r.new_max_current) 
     {
@@ -179,14 +173,6 @@ void loop() {
       if (ECHO_COMMANDS) 
       {
         Serial << "Setting current position as the zero point" << endl;
-      }
-    }
-    if (r.do_idle) 
-    {
-      drive.SetIdle();
-      if (ECHO_COMMANDS) 
-      {
-        Serial << "Setting drive to idle." << endl;
       }
     }
     if (r.new_debug) 
@@ -227,12 +213,9 @@ void loop() {
     }
   }
 
-  ///////////////////////////////////////////////////////////////////////
   // Send measurements to workstation
-  if (print_robot_states){
+  if (send_robot_states){
     if (micros() - last_print_ts >= OBSERVE_DELAY) {
-      // Serial << "\n Sending data to PC at : " << micros() << endl; // - mathew
-      // Serial << "\n Velocity: " << drive.GetActuatorVelocity(0) << endl;
       drive.PrintMsgPackStatus(options);
       last_print_ts = micros();
     }

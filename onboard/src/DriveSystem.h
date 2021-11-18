@@ -2,7 +2,6 @@
 
 #include <BasicLinearAlgebra.h>
 #include "C610Bus.h"
-#include "PID.h"
 #include "RobotTypes.h"
 
 // Enum for the various control modes: idle, position control, current control
@@ -101,10 +100,10 @@ class DriveSystem {
   // Pass quaternion values
   void SetQuaternions(float q0, float q1, float q2, float q3);
 
-  // Set current target for actuator i.
-  void SetCurrent(uint8_t i, float target_current);
+  // Set ControlMode to TorqueControl
+  void SetTorqueControl();
 
-  // Set torque for actuator i.
+  // Set torque for all motors.
   void SetTorques(BLA::Matrix<12> torques);
 
   // Set current level that would trigger a fault.

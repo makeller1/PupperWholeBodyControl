@@ -170,6 +170,9 @@ class HardwareInterface:
             {"idle": True, "activations": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
         )
 
+    def set_trq_mode(self):
+        self.send_dict({"trq_mode": True})
+
     def zero_motors(self):
         self.send_dict({"zero": True})
 

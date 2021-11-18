@@ -58,25 +58,6 @@ std::array<int32_t, N> Utils::ConvertToFixedPoint(std::array<float, N> in,
   return out;
 }
 
-/*
-Return the infinity norm of a 3-vector
-*/
-float Utils::InfinityNorm3(BLA::Matrix<3> vec) {
-  return std::max(std::max(abs(vec(0)), abs(vec(1))), abs(vec(2)));
-}
-
-/*
-Construct a 3x3 diagonal matrix from a provided 3-vector.
-*/
-BLA::Matrix<3, 3> Utils::DiagonalMatrix3x3(BLA::Matrix<3> diag) {
-  BLA::Matrix<3, 3> retval;
-  retval.Fill(0);
-  for (int i = 0; i < 3; i++) {
-    retval(i, i) = diag(i);
-  }
-  return retval;
-}
-
 // TODO: enforce that N==UN
 template <int N, size_t UN>
 std::array<float, UN> Utils::VectorToArray(BLA::Matrix<N> vec) {

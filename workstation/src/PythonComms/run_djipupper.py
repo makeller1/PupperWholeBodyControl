@@ -86,6 +86,9 @@ def main(FLAGS):
     # If done correctly, repeatability is < 1 degree
     input("Press enter to ZERO MOTORS") # - mathew    
 
+    # Put Pupper into torque control mode
+    hardware_interface.set_trq_mode()
+
     hardware_interface.zero_motors() 
     print("Zeroing Done")
     hardware_interface.set_max_current_from_file() # - mathew
