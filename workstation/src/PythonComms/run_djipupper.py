@@ -56,7 +56,7 @@ def main(FLAGS):
     def commandCallback(msg):
         data.commands = list(msg.data)
     
-    # Create the subscriber and publisher
+    # Create the ROS subscriber and publisher
     state_pub   = rospy.Publisher("pupper_state", JointState, queue_size=1)
     pose_pub    = rospy.Publisher("pupper_pose", Pose, queue_size=1)
     command_sub = rospy.Subscriber("pupper_commands", Float64MultiArray, commandCallback, queue_size=1)
@@ -75,27 +75,6 @@ def main(FLAGS):
     joystick_interface = JoystickInterface(config)
     print("Done.")
 
-    summarize_config(config)
-
-    if FLAGS.log:
-        #today_string = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        filename = os.path.join(DIRECTORY, FILE_DESCRIPTOR + ".csv")
-        log_file = open(filename, "w")
-        hardware_interface.write_logfile_header(log_file)
-
-    if FLAGS.zero:
-        # hardware_interface.set_joint_space_parameters(0, 4.0, 4.0)
-        hardware_interface.set_joint_space_parameters(
-            0, 4.0, 0.2
-        )  # mathew (changed max current to .2)
-        hardware_interface.set_actuator_postions(np.zeros((3, 4)))
-        input(
-            "Do you REALLY want to calibrate? Press enter to continue or ctrl-c to quit."
-        )
-        print("Zeroing motors...", end="")
-        hardware_interface.zero_motors()
-        hardware_interface.set_max_current_from_file()
-        print("Done.")
 
     # The zero position is set with pupper laying down with elbows back. 
     # Follow this procedure: 1. Lay pupper flat
@@ -214,6 +193,7 @@ def main(FLAGS):
                     state_msg.position[i] = joint_pos
                     state_msg.velocity[i] = joint_vel
                     state_msg.effort[i]   = joint_cur
+
                 # Send the robot state to the C++ node
                 state_pub.publish(state_msg)
 
@@ -268,17 +248,6 @@ def main(FLAGS):
                 hardware_interface.set_torque(WBC_commands_reordered) # FR, FL, BR, BL
                 
                 # ------------------------------------------- 
-
-                ## Commented below - 
-                # hardware_interface.set_cartesian_positions(
-                #     state.final_foot_locations
-                # )
-
-                if FLAGS.log:
-                    any_data = hardware_interface.log_incoming_data(log_file)
-                    if any_data:
-                        print(any_data["ts"])
-
                 # if command.activate_event == 1:
                 #     print("Deactivating Robot")
                 #     print("Waiting for L1 to activate robot.")
@@ -296,19 +265,8 @@ def main(FLAGS):
                     break
 
     except KeyboardInterrupt:
-        if FLAGS.log:
-            print("Closing log file")
-            log_file.close()
+        hardware_interface.set_torque([0]*12) # Zero torques when quit
 
-
-def summarize_config(config):
-    # Print summary of configuration to console for tuning purposes
-    print("Summary of gait parameters:")
-    print("overlap time: ", config.overlap_time)
-    print("swing time: ", config.swing_time)
-    print("z clearance: ", config.z_clearance)
-    print("default height: ", config.default_z_ref)
-    print("x shift: ", config.x_shift)
 
 
 if __name__ == "__main__":

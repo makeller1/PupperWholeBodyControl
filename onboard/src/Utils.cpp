@@ -58,20 +58,6 @@ std::array<int32_t, N> Utils::ConvertToFixedPoint(std::array<float, N> in,
   return out;
 }
 
-// TODO: get this thing to work.
-// // Takes a function f and creates an array: [f(0), f(1), f(2), ...]
-// template <class T, class MemberClass, size_t N, class IndexType>
-// std::array<T, N> GenerateArray(T (MemberClass::*fill_function) (IndexType
-// index))
-// {
-//     std::array<T, N> out;
-//     for (size_t i = 0; i<N; i++)
-//     {
-//         out[i] = fill_function(i);
-//     }
-//     return out;
-// }
-
 /*
 Return the infinity norm of a 3-vector
 */

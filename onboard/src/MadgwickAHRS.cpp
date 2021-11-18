@@ -1,9 +1,8 @@
 //=====================================================================================================
 // MadgwickAHRS.c
 //=====================================================================================================
-// FROM: https://github.com/kriswiner/MPU9250/blob/master/MPU9250_BME280_SPIFlash_Ladybug/MadgwickFilter.ino
+// Modified from: https://github.com/kriswiner/MPU9250/blob/master/MPU9250_BME280_SPIFlash_Ladybug/MadgwickFilter.ino
 //=====================================================================================================
-
 //---------------------------------------------------------------------------------------------------
 // Header files
 
@@ -15,37 +14,19 @@
 
 //---------------------------------------------------------------------------------------------------
 // Definitions
-
 #define sampleFreq	512.0f		// sample frequency in Hz (Note: I use dt instead)
-#define betaDef		0.1f		// 2 * proportional gain was: .1 kris suggests .60
+#define beta 0.1f // 2 * proportional gain (Kp)						
 
-//---------------------------------------------------------------------------------------------------
-// Variable definitions
-
-volatile float beta = betaDef;								// 2 * proportional gain (Kp)
-volatile float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f;	// quaternion of sensor frame relative to auxiliary frame
-
-//---------------------------------------------------------------------------------------------------
-// Function declarations
-
-//====================================================================================================
 // Functions
 #define SERIAL_PORT Serial
 //---------------------------------------------------------------------------------------------------
 // AHRS algorithm update
-void MadgwickKrisUpdate(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz, float dt) {
+std::array<float, 4> MadgwickUpdate(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz, float q0, float q1, float q2, float q3, float dt) {
             float norm;
             float hx, hy, _2bx, _2bz;
             float s1, s2, s3, s4;
             float qDot1, qDot2, qDot3, qDot4;
 
-            // For debugging
-            // Serial.print(mx,7);
-            // Serial.print(", ");
-            // Serial.print(my,7);
-            // Serial.print(", ");
-            // Serial.print(mz,7);
-            // Serial.println(";");
 		// 	// Convert gyroscope degrees/sec to radians/sec
 			gx *= 0.0174533f;
 			gy *= 0.0174533f;
@@ -132,6 +113,8 @@ void MadgwickKrisUpdate(float gx, float gy, float gz, float ax, float ay, float 
             q1 *= norm;
             q2 *= norm;
             q3 *= norm;
+
+            return {q0,q1,q2,q3};
 }
 
 
