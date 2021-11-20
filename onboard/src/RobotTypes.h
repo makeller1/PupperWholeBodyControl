@@ -1,8 +1,6 @@
 #pragma once
 #include <Arduino.h>
-
 #include <array>
-
 #include "Streaming.h"
 
 typedef std::array<float, 12> ActuatorPositionVector;

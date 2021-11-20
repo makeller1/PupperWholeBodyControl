@@ -14,7 +14,7 @@ const bool send_robot_states = true; // This is needed to send motor / IMU data 
 
 bool print_debug_info = false; 
 
-const bool ECHO_COMMANDS = false; // false; Set true for debugging - mathew
+const bool ECHO_COMMANDS = false; // Set true for debugging
 const bool AHRS_ENABLED = false; // Are we running with the AHRS/IMU enabled?
 
 ////////////////////// SETUP IMU ////////////////////////

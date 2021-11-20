@@ -51,6 +51,12 @@ class DriveSystem {
   // torque.
   ActuatorActivations active_mask_;
 
+  // Indicates which motors violate fault_velocity_
+  ActuatorActivations viol_vel_mask_;
+
+  // Indicates which motors violate fault_position_
+  ActuatorActivations viol_pos_mask_;
+
   // Maximum current for current control and PD mode.
   float max_current_;
 
@@ -114,6 +120,9 @@ class DriveSystem {
 
   // Set activations for all the motors simultaneously.
   void SetActivations(ActuatorActivations acts);
+
+  // Derivative control to regulate velocity
+  void CommandBraking();
 
   // Send zero torques to the escs.
   void CommandIdle();

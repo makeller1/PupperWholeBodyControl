@@ -9,17 +9,21 @@ DriveSystem::DriveSystem() : front_bus_(), rear_bus_()
 {
   control_mode_ = DriveControlMode::kTorqueControl; // - mathew
   fault_current_ = 10.0; // Violation sets control mode to kError
-  fault_position_array_[0] = PI/4; // PI/4 fault_positions for each joint (hip, shoulder, elbow, for all legs) - mathew
-  fault_position_array_[1] = 5.0; //5.0;
-  fault_position_array_[2] = 5.0; //5.0;
+  fault_position_array_[0] = PI/4; // hip fault_position
+  fault_position_array_[1] = 5.0; // shoulder fault_position
+  fault_position_array_[2] = 5.0; // elbow fault_position
 
+  // Default values
   fault_velocity_ =
       10.0;  // TODO: Determine if this is reasonable
-  max_current_ = 4.0; // Saturates current command
+  max_current_ = 1.0; // Saturates current command
   velocity_reference_.fill(0.0);
   current_reference_.fill(
       0.0);  // TODO: log the commanded current even when in position PID mode
+
   active_mask_.fill(false);
+  viol_vel_mask_.fill(false);
+  viol_pos_mask_.fill(false);
 
   // quaternion of sensor frame relative to global frame
   q0_ = 1;
@@ -47,33 +51,46 @@ void DriveSystem::CheckForCANMessages()
 
 DriveControlMode DriveSystem::CheckErrors() 
 {
-  // for (size_t i = 0; i < kNumActuators; i++) {
-  //   // check positions
-  //   if (abs(GetActuatorPosition(i)) > fault_position_) {
-  //     Serial << "actuator[" << i << "] hit fault position: " << fault_position_
-  //            << endl;
-  //     return DriveControlMode::kError;
-  //   }
-  //   // check velocities
-  //   if (abs(GetActuatorVelocity(i)) > fault_velocity_) {
-  //     Serial << "actuator[" << i << "] hit fault velocity: " << fault_velocity_
-  //            << endl;
-  //     return DriveControlMode::kError;
-  //   }
-  // }
-  // check position of each motor
-    for (size_t i = 0; i < 4; i++) 
+  bool error_found = false;
+
+  for (size_t i = 0; i < kNumActuators; i++) 
+  {
+    // check positions
+    if (abs(GetActuatorPosition(i)) > fault_position_) 
     {
-      if (abs(GetActuatorPosition(i*3)) > fault_position_array_[0] || 
-          abs(GetActuatorPosition(i*3 + 1)) > fault_position_array_[1] ||
-          abs(GetActuatorPosition(i*3 + 2)) > fault_position_array_[2]){
-        // Serial << "Leg[" << i << "] hit fault position: " << fault_position_ << endl;
-        return DriveControlMode::kError;
-      }
+      viol_pos_mask_[i] = true;
+      error_found = true;
+      // TODO: condition print on debugging flag
+      // Serial << "actuator[" << i << "] hit fault position: " << fault_position_
+      //        << endl;
     }
-  //Serial << "CheckError() was called and that sets motors idle" << endl; // - mathew
-  //return DriveControlMode::kIdle; // This shouldn't be called just for checking errors, right?
-  return control_mode_; // - mathew
+    else
+    {
+      viol_pos_mask_[i] = false;
+    }
+    // check velocities
+    if (abs(GetActuatorVelocity(i)) > fault_velocity_) 
+    {
+      viol_vel_mask_[i] = true;
+      error_found = true;
+      // TODO: condition print on debugging flag
+      // Serial << "actuator[" << i << "] hit fault velocity: " << fault_velocity_
+      //        << endl;
+    }
+    else
+    {
+      viol_vel_mask_[i] = false;
+    }
+  }
+
+  if (error_found)
+  {
+    return DriveControlMode::kError;
+  }
+  else
+  {
+    return control_mode_;
+  }
 }
 
 void DriveSystem::SetIdle() 
@@ -123,16 +140,18 @@ BLA::Matrix<12> DriveSystem::TorqueControl()
   motor_currents.Fill(0);
 
   for (int i=0; i<12; i++){
-    motor_currents(i) = 1.0 * torques_(i); // TODO : Find out if we need to convert torque to current or does C610 do that
+    motor_currents(i) = 1.0 * torques_(i); 
   }
   // Note: motor_currents are constrained in command_current to max_current_
 
   return motor_currents;
 }
 
-void DriveSystem::Update() {
+void DriveSystem::Update() 
+{
   // If there are errors, put the system in the error state.
-  if (CheckErrors() == DriveControlMode::kError) {
+  if (CheckErrors() == DriveControlMode::kError) 
+  {
     control_mode_ = DriveControlMode::kError;
   }
 
@@ -140,8 +159,9 @@ void DriveSystem::Update() {
   {
     case DriveControlMode::kError: 
     {
-      Serial << "\nDriveControlMode is ERROR\n" << endl;
-      CommandIdle();
+      CommandBraking();
+      // TODO: condition print on debugging flag
+      Serial << "\nDriveControlMode is kError\n" << endl;
       break;
     }
     case DriveControlMode::kTorqueControl: 
@@ -153,18 +173,36 @@ void DriveSystem::Update() {
   }
 }
 
-void DriveSystem::SetActivations(ActuatorActivations acts) {
+void DriveSystem::SetActivations(ActuatorActivations acts) 
+{
   active_mask_ = acts;  // Is this a copy?
 }
 
-void DriveSystem::CommandIdle() {
+void DriveSystem::CommandBraking() 
+{
+  // Regulate joint velocity to prevent destructive joint positions or velocities
+  const float Kd = .6;
+  ActuatorCurrentVector currents;
+  currents.fill(0.0);
+  for (size_t i; i < kNumActuators; i++)
+  {
+    if (viol_pos_mask_[i] || viol_vel_mask_[i])
+    {
+      currents[i] = -Kd*GetActuatorVelocity(i);
+    }
+  }
+  CommandCurrents(currents);
+}
+
+void DriveSystem::CommandIdle() 
+{
   ActuatorCurrentVector currents;
   currents.fill(0.0);
   CommandCurrents(currents);
-  // Serial << "CommandIdle() was called - Mathew" << endl;
 }
 
-void DriveSystem::CommandCurrents(ActuatorCurrentVector currents) {
+void DriveSystem::CommandCurrents(ActuatorCurrentVector currents) 
+{
   ActuatorCurrentVector current_command =
       Utils::Constrain(currents, -max_current_, max_current_);
   if (Utils::Maximum(current_command) > fault_current_ ||
