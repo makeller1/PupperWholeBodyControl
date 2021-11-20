@@ -58,7 +58,7 @@ sudo apt install ros-noetic-gazebo-ros
 	```
 2. Start the python code that communicates with the keyboard controller, C++ code, and the pupper. Open a new terminal and enter
 	```
-	cd ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/src
+	cd ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/src/PythonComms
 	python3 run_djipupper.py 
 	```
 	
