@@ -20,8 +20,6 @@ DriveSystem::DriveSystem() : front_bus_(), rear_bus_()
   velocity_reference_.fill(0.0);
   current_reference_.fill(
       0.0);  // TODO: log the commanded current even when in position PID mode
-
-  active_mask_.fill(false);
   viol_vel_mask_.fill(false);
   viol_pos_mask_.fill(false);
 
@@ -123,6 +121,7 @@ void DriveSystem::SetMaxCurrent(float max_current) {
 
 void DriveSystem::SetTorqueControl()
 {
+  ZeroCurrentPosition();
   control_mode_ = DriveControlMode::kTorqueControl; // Remove this so we stay in other control modes despite commands being sent
 }
 
@@ -160,8 +159,6 @@ void DriveSystem::Update()
     case DriveControlMode::kError: 
     {
       CommandBraking();
-      // TODO: condition print on debugging flag
-      Serial << "\nDriveControlMode is kError\n" << endl;
       break;
     }
     case DriveControlMode::kTorqueControl: 
@@ -173,18 +170,13 @@ void DriveSystem::Update()
   }
 }
 
-void DriveSystem::SetActivations(ActuatorActivations acts) 
-{
-  active_mask_ = acts;  // Is this a copy?
-}
-
 void DriveSystem::CommandBraking() 
 {
   // Regulate joint velocity to prevent destructive joint positions or velocities
   const float Kd = .6;
   ActuatorCurrentVector currents;
   currents.fill(0.0);
-  for (size_t i; i < kNumActuators; i++)
+  for (size_t i=0; i < kNumActuators; i++)
   {
     if (viol_pos_mask_[i] || viol_vel_mask_[i])
     {
@@ -211,8 +203,6 @@ void DriveSystem::CommandCurrents(ActuatorCurrentVector currents)
     control_mode_ = DriveControlMode::kError;
     return;
   }
-  // Set disabled motors to zero current
-  current_command = Utils::MaskArray(current_command, active_mask_);
 
   // Convert the currents into the motors' local frames
   current_command =
@@ -309,6 +299,9 @@ void DriveSystem::PrintMsgPackStatus(DrivePrintOptions options) {
       doc["quat"][1] = q1_; // x
       doc["quat"][2] = q2_; // y
       doc["quat"][3] = q3_; // z
+    }
+    if (control_mode_ == DriveControlMode::kError){
+      doc["err"] = 1;
     }
   }
   uint16_t num_bytes = measureMsgPack(doc);

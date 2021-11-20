@@ -23,7 +23,6 @@ class CommandInterpreter {
  private:
   ActuatorTorqueVector torque_command_;
   ActuatorPositionVector position_command_;
-  ActuatorActivations activations_;
   float max_current_;
   bool trq_mode_set_;
   bool print_debug_info_;
@@ -45,8 +44,6 @@ class CommandInterpreter {
   CheckResult CheckForMessages();
 
   ActuatorPositionVector LatestCartesianPositionCommand();
-
-  ActuatorActivations LatestActivations();
 
   // Returns an ActuatorTorqueVector with the latest torque commands.
   ActuatorTorqueVector LatestTorqueCommand(); // - mathew
@@ -113,16 +110,6 @@ CheckResult CommandInterpreter::CheckForMessages() {
       result.new_max_current = true;
       result.flag = CheckResultFlag::kNewCommand;
     }
-    if (obj.containsKey("activations")) 
-    {
-      auto json_array = obj["activations"].as<JsonArray>();
-      result.flag = CopyJsonArray(json_array, activations_);
-      if (result.flag == CheckResultFlag::kError) 
-      {
-        return result;
-      }
-      result.new_activation = result.flag == CheckResultFlag::kNewCommand;
-    }
     if (obj.containsKey("zero")) 
     {
       if (obj["zero"].as<bool>()) 
@@ -145,10 +132,6 @@ bool CommandInterpreter::LatestDebug() { return print_debug_info_; }
 
 ActuatorTorqueVector CommandInterpreter::LatestTorqueCommand(){
   return torque_command_;
-}
-
-ActuatorActivations CommandInterpreter::LatestActivations() {
-  return activations_;
 }
 
 float CommandInterpreter::LatestMaxCurrent() { return max_current_; }

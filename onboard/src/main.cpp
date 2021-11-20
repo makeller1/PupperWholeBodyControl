@@ -115,7 +115,6 @@ void setup(void) {
   last_header_ts = millis();
 
   // Runtime config
-  drive.SetActivations({1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
   drive.SetMaxCurrent(MAX_CURRENT);
   options.delimiter = ',';
   options.positions = true;
@@ -159,14 +158,6 @@ void loop()
         Serial << "Max Current: " << interpreter.LatestMaxCurrent() << endl;
       }
     }
-    if (r.new_activation) 
-    {
-      drive.SetActivations(interpreter.LatestActivations());
-      if (ECHO_COMMANDS) 
-      {
-        Serial << "Activations: " << interpreter.LatestActivations() << endl;
-      }
-    }
     if (r.do_zero) 
     {
       drive.ZeroCurrentPosition();
@@ -207,9 +198,6 @@ void loop()
 
       // Send quaternion values to DriveSystem
       drive.SetQuaternions(quats[0],quats[1],quats[2],quats[3]);
-
-      // Run with processing to visualize orientation
-      // printQuat(); // Send quaternion estimates to serial stream
     }
   }
 

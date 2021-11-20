@@ -47,10 +47,6 @@ class DriveSystem {
 
   BLA::Matrix<12> torques_; // mathew
 
-  // Indicates which motors are "active". Those which are inactive get 0
-  // torque.
-  ActuatorActivations active_mask_;
-
   // Indicates which motors violate fault_velocity_
   ActuatorActivations viol_vel_mask_;
 
