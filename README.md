@@ -70,3 +70,12 @@ sudo apt install ros-noetic-gazebo-ros
 5. Navigate to the folder src/onboard
 6. Select Open "onboard"
 7. In the PlatformIO tab, select Project Tasks> teensy40 > Build 
+
+# Zeroing the Pupper
+The zero position is set with pupper laying on the ground. 
+1. Lay pupper flat with elbows and knees back (all feet pointing forward)
+2. Rotate hips to raise legs
+3. Rotate elbows to raise feet off the ground
+4. Rotate hips to lower the legs until the end of the motors touch the ground
+5. Rotate elbows to lower feet until they touch the ground (the motors should be rubbing against the ground at this point)
+If done correctly, *repeatability is < 1 deg*
