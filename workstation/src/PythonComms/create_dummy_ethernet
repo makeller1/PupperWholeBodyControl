@@ -1,0 +1,6 @@
+#!/bin/bash
+sudo lsmod | grep dummy
+sudo modprobe dummy
+sudo lsmod | grep dummy
+sudo ip link add eth10 type dummy
+sudo ifconfig eth10 10.0.0.52 netmask 255.255.255.0

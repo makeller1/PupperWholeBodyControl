@@ -58,12 +58,12 @@ def main():
     hardware_interface.set_trq_mode()
 
     # The zero position is set with pupper laying down with elbows back. 
-    input("Press enter to ZERO MOTORS") # - mathew    
+    input("Press enter to ZERO MOTORS")     
 
     # Zero motors
     hardware_interface.zero_motors() 
     print("Zeroing Done")
-    hardware_interface.set_max_current(1.0) # - mathew
+    hardware_interface.set_max_current(1.0) # Saturation (not fault)
     
     current_commands = [0]*12
     try:
@@ -115,8 +115,8 @@ def main():
                 torque_cmd = WBC_commands_reordered[i]
                 vel        = PupComm.robot_states_["vel"][i]
                 current_commands[i] = 1/0.308 * (torque_cmd + 0.0673 * np.sign(vel) + .00277 * vel) 
-                # Over-rise current 
-                current_commands[i] = 0
+                # # Over-ride current 
+                # current_commands[i] = 0
 
             hardware_interface.set_torque(current_commands) # FR, FL, BR, BL
             
