@@ -58,24 +58,25 @@ sudo apt install ros-noetic-gazebo-ros
 	```
 2. Start the ros node (communication between C++ code and Python code) by running:
 	```
-	rosrun ase389 PupperNode
+	rosrun workstation PupperNode
 	```
-4. If you don't have a physical ethernet adapter (common on laptops), create a virtual one. This is required to communicate with the keyboard controller interface.
+3. If you don't have a physical ethernet adapter (common on laptops), create a virtual one. This is required to communicate with the keyboard controller interface.
 	```
 	cd ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/src/PythonComms
 	bash create_dummy_ethernet
 	```
-3. Run keyboard controller:
+4. Run keyboard controller:
 	```
 	cd ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/src/PythonComms/KeyboardController
 	python3 keyboard_joystick.py
 	```
-4. Start the python code that communicates with the keyboard controller, C++ code, and the pupper. Open a new terminal and enter:
+5. Start the python code that communicates with the keyboard controller, C++ code, and the pupper. Open a new terminal and enter:
 	```
 	cd ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/src/PythonComms
 	python3 run_djipupper.py 
 	```
-	
+Note: the order of these steps is important.
+
 # Building and uploading the Teensy code
 1. Open VS code
 2. Install the PlatformIO extension
