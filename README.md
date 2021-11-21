@@ -52,11 +52,25 @@ sudo apt install ros-noetic-gazebo-ros
 	roslaunch workstation load_pupper.launch
 	```
 # Running WBC on Pupper
-1. Start ros by opening a terminal and running
+1. Start ros by opening a terminal and running:
 	```
 	roscore
 	```
-2. Start the python code that communicates with the keyboard controller, C++ code, and the pupper. Open a new terminal and enter
+2. Start the ros node (communication between C++ code and Python code) by running:
+	```
+	rosrun ase389 PupperNode
+	```
+4. If you don't have a physical ethernet adapter (common on laptops), create a virtual one. This is required to communicate with the keyboard controller interface.
+	```
+	cd ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/src/PythonComms
+	bash create_dummy_ethernet
+	```
+3. Run keyboard controller:
+	```
+	cd ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/src/PythonComms/KeyboardController
+	python3 keyboard_joystick.py
+	```
+4. Start the python code that communicates with the keyboard controller, C++ code, and the pupper. Open a new terminal and enter:
 	```
 	cd ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/src/PythonComms
 	python3 run_djipupper.py 
