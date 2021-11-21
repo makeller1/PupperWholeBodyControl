@@ -60,9 +60,6 @@ class DriveSystem {
   // than SW saturation current.
   float fault_current_;
 
-  // Max position before system errors out.
-  float fault_position_;
-
   // Max velocity before system errors out.
   float fault_velocity_;
 

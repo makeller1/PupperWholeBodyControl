@@ -4,3 +4,4 @@ onboard/.gitignore
 **/build
 **/devel
 *.code-workspace
+**/__pycache__

@@ -9,14 +9,13 @@ DriveSystem::DriveSystem() : front_bus_(), rear_bus_()
 {
   control_mode_ = DriveControlMode::kTorqueControl; // - mathew
   fault_current_ = 10.0; // Violation sets control mode to kError
-  fault_position_array_[0] = PI/4; // hip fault_position
-  fault_position_array_[1] = 5.0; // shoulder fault_position
-  fault_position_array_[2] = 5.0; // elbow fault_position
+  fault_position_array_[0] = PI/4; // PI/4 // hip fault_position
+  fault_position_array_[1] = 5.0; // 5.0 shoulder fault_position
+  fault_position_array_[2] = 5.0; // 5.0 elbow fault_position
 
   // Default values
-  fault_velocity_ =
-      10.0;  // TODO: Determine if this is reasonable
-  max_current_ = 1.0; // Saturates current command
+  fault_velocity_ = 30.0;  // TODO: Determine if this is reasonable
+  max_current_ = 3.0; // Saturates current command
   velocity_reference_.fill(0.0);
   current_reference_.fill(
       0.0);  // TODO: log the commanded current even when in position PID mode
@@ -54,13 +53,10 @@ DriveControlMode DriveSystem::CheckErrors()
   for (size_t i = 0; i < kNumActuators; i++) 
   {
     // check positions
-    if (abs(GetActuatorPosition(i)) > fault_position_) 
+    if (abs(GetActuatorPosition(i)) > fault_position_array_[i % 3]) 
     {
       viol_pos_mask_[i] = true;
       error_found = true;
-      // TODO: condition print on debugging flag
-      // Serial << "actuator[" << i << "] hit fault position: " << fault_position_
-      //        << endl;
     }
     else
     {
@@ -71,9 +67,6 @@ DriveControlMode DriveSystem::CheckErrors()
     {
       viol_vel_mask_[i] = true;
       error_found = true;
-      // TODO: condition print on debugging flag
-      // Serial << "actuator[" << i << "] hit fault velocity: " << fault_velocity_
-      //        << endl;
     }
     else
     {
@@ -173,7 +166,7 @@ void DriveSystem::Update()
 void DriveSystem::CommandBraking() 
 {
   // Regulate joint velocity to prevent destructive joint positions or velocities
-  const float Kd = .6;
+  const float Kd = 1.2;
   ActuatorCurrentVector currents;
   currents.fill(0.0);
   for (size_t i=0; i < kNumActuators; i++)

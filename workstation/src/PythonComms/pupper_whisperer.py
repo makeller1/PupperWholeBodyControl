@@ -27,7 +27,8 @@ The teensy uses the order
 class whisperer:
     def __init__(self):
 
-        # robot_states is a dictionary with the following keys:
+        # robot_states are the states in the Teensy's frame
+        # It is a dictionary with the following keys:
         # ts : current time 1x1
         # vel : velocity 12x1 (array)
         # pos : position 12x1 (array)
@@ -78,15 +79,15 @@ class whisperer:
                             "front_right_shoulder":  -1, # -
                             "front_right_elbow":      1  # +
                             }
-        self.torque_commands_reordered = [0] * 12
+        self.commands_reordered = [0] * 12
 
     def get_joint_state(self, joint_name):
         i = self.joint_name_map[joint_name]
         sign = self.joint_sign_map[joint_name]
-        zero_offset = self.zero_pos_map[joint_name] # We currently implement the offset on our side
+        zero_offset = self.zero_pos_map[joint_name] # We currently implement the zero-offset on the workstation
         joint_pos = self.robot_states_['pos'][i] * sign + zero_offset
         joint_vel = self.robot_states_['vel'][i] * sign
-        joint_cur = self.robot_states_['cur'][i] 
+        joint_cur = self.robot_states_['cur'][i] * sign
         return [joint_pos, joint_vel, joint_cur]
 
     def get_pupper_orientation(self):
@@ -103,10 +104,10 @@ class whisperer:
         else:
             print("Robot states is None")
 
-    def reorder_torques(self, torque_commands):
+    def reorder_commands(self, commands):
         i = 0
         for name, index in self.joint_name_map.items():
-            self.torque_commands_reordered[index] = torque_commands[i] * self.joint_sign_map[name]
+            self.commands_reordered[index] = commands[i] * self.joint_sign_map[name]
             i = i + 1
             #Debugging:
             # print("NAME: ", name)
@@ -114,7 +115,7 @@ class whisperer:
             # print("VALUE: ", torque_commands[i])
             # sign = self.joint_sign_map[name]
             # print("SIGN: ", sign)
-        return self.torque_commands_reordered
+        return self.commands_reordered
 
     def check_errors(self):
         if "err" in self.robot_states_:
@@ -123,20 +124,24 @@ class whisperer:
         else:
             return False
 
-    def print_states(self):
-        # --------------------- Make sure we're reading info from pupper ---------------------------
-        print("front right hip : {:+.5f}".format(self.get_joint_state("front_right_hip")[0]), "  "
-                "front right shoulder : {:+.5f}".format(self.get_joint_state("front_right_shoulder")[0]), "  "
-                "front right elbow : {:+.5f}".format(self.get_joint_state("front_right_elbow")[0]))
+    def print_states(self, state_idx=0):
+        # Print the states of each joint
+        # input: state_idx - which state will be printed: 
+        #                    0 : pos
+        #                    1 : vel
+        # --------------------- Position states  ---------------------------
+        print("front right hip : {:+.3f}".format(self.get_joint_state("front_right_hip")[state_idx]), "  "
+                "front right shoulder : {:+.3f}".format(self.get_joint_state("front_right_shoulder")[state_idx]), "  "
+                "front right elbow : {:+.3f}".format(self.get_joint_state("front_right_elbow")[state_idx]))
 
-        print("back left hip : {:+.5f}".format(self.get_joint_state("back_left_hip")[0]), "  "
-                "back left shoulder : {:+.5f}".format(self.get_joint_state("back_left_shoulder")[0]), "  "
-                "back left elbow : {:+.5f}".format(self.get_joint_state("back_left_elbow")[0]))
+        print("back left hip   : {:+.3f}".format(self.get_joint_state("back_left_hip")[state_idx]), "  "
+                "back left shoulder : {:+.3f}".format(self.get_joint_state("back_left_shoulder")[state_idx]), "  "
+                "back left elbow : {:+.3f}".format(self.get_joint_state("back_left_elbow")[state_idx]))
 
-        print("back right hip : {:+.5f}".format(self.get_joint_state("back_right_hip")[0]), "  "
-                "back right shoulder : {:+.5f}".format(self.get_joint_state("back_right_shoulder")[0]), "  "
-                "back right elbow : {:+.5f}".format(self.get_joint_state("back_right_elbow")[0]))
+        print("back right hip  : {:+.3f}".format(self.get_joint_state("back_right_hip")[state_idx]), "  "
+                "back right shoulder : {:+.3f}".format(self.get_joint_state("back_right_shoulder")[state_idx]), "  "
+                "back right elbow : {:+.3f}".format(self.get_joint_state("back_right_elbow")[state_idx]))
         
-        print("front left hip : {:+.5f}".format(self.get_joint_state("front_left_hip")[0]), "  "
-                "front left shoulder : {:+.5f}".format(self.get_joint_state("front_left_shoulder")[0]), "  "
-                "front left elbow : {:+.5f}".format(self.get_joint_state("front_left_elbow")[0]))
+        print("front left hip  : {:+.3f}".format(self.get_joint_state("front_left_hip")[state_idx]), "  "
+                "front left shoulder : {:+.3f}".format(self.get_joint_state("front_left_shoulder")[state_idx]), "  "
+                "front left elbow : {:+.3f}".format(self.get_joint_state("front_left_elbow")[state_idx]))

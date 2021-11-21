@@ -1,3 +1,8 @@
+# TODO: Fix the torque to current transformation. 
+#         - The velocity and torque are not aligning correctly so the driving mode doesn't change
+#           from forward to backward.
+#       
+
 #!/usr/bin/env python
 ################ FOR ROS #######################
 import rospy
@@ -11,12 +16,12 @@ from KeyboardController.JoystickInterface import JoystickInterface
 from SerialInterface import HardwareInterface
 from SerialInterface.IndividualConfig import SERIAL_PORT 
 from pupper_whisperer import whisperer 
+from utilities import trq_to_current
 
 class Data:
     def __init__(self):
         # Create a list to hold the joint commands to send to the pupper
         self.commands = [0.0]*12
-
 
 def main():
     """Main program"""
@@ -63,7 +68,7 @@ def main():
     # Zero motors
     hardware_interface.zero_motors() 
     print("Zeroing Done")
-    hardware_interface.set_max_current(1.0) # Saturation (not fault)
+    hardware_interface.set_max_current(3.0) # Saturation (not fault)
     
     current_commands = [0]*12
     try:
@@ -71,7 +76,8 @@ def main():
 
             command = joystick_interface.get_command()
             
-            PupComm.print_states()
+            #Print velocity states
+            # PupComm.print_states(1)
 
             # Read data from pupper
             PupComm.store_robot_states(hardware_interface.get_robot_states())
@@ -99,26 +105,31 @@ def main():
 
             #Send Orientation to the C++ node
             pose_pub.publish(pose_msg)
-
+            
             # Read torque command from ROS
-            WBC_commands_reordered = PupComm.reorder_torques(data.commands)
+            WBC_commands = data.commands
 
-            print(WBC_commands_reordered)
+            # Override torque command for TESTING
+            WBC_commands[9] = .5
+
+            # Tranform to Teensy's frame
+            WBC_commands_reordered = PupComm.reorder_commands(WBC_commands)  
 
             # -------------------------------------------
             # -------- Send torques to pupper ---------- 
             # ------------------------------------------- 
-
-            # Scaling factors found in C610.cpp in Stanford's code
             for i in range(12):
                 # Convert torque to current
                 torque_cmd = WBC_commands_reordered[i]
-                vel        = PupComm.robot_states_["vel"][i]
-                current_commands[i] = 1/0.308 * (torque_cmd + 0.0673 * np.sign(vel) + .00277 * vel) 
-                # # Over-ride current 
-                # current_commands[i] = 0
-
-            hardware_interface.set_torque(current_commands) # FR, FL, BR, BL
+                q_ddot_des = 1 #Direction of desired acceleration TODO: !!! pass desired acceleration through ROS node !!!
+                vel = PupComm.robot_states_["vel"][i]
+                current_commands[i] = trq_to_current(torque_cmd, q_ddot_des, vel)
+                if i == 0:
+                    print("Velocity:",vel)
+                    print("Desired torque",torque_cmd)
+                    print("Desired current",current_commands[i])
+            
+            hardware_interface.set_torque(current_commands) # misnomer until trq to current transformation is done on Teensy
             
             # Sleep to maintain the desired frequency
             rate.sleep()
@@ -136,6 +147,10 @@ def main():
 
     except KeyboardInterrupt:
         hardware_interface.set_torque([0]*12) # Zero torques when quit
+        print("Stopping motors.")
+    finally:
+        hardware_interface.set_torque([0]*12) # Zero torques when quit
+        print("Stopping motors.")
 
 if __name__ == "__main__":
     # Initialize the ROS node

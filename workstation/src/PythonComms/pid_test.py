@@ -113,7 +113,7 @@ def main():
                 # Set desired current:
                 manual_torques[9] = motor_torque #make sure limits are obeyed
 
-                WBC_commands_reordered = PupComm.reorder_torques(manual_torques)
+                WBC_commands_reordered = PupComm.reorder_commands(manual_torques)
 
                 #Set_torque actually sets currents
                 hardware_interface.set_torque(WBC_commands_reordered)
@@ -135,6 +135,7 @@ def main():
 
     except KeyboardInterrupt:
         hardware_interface.set_torque([0]*12) # Zero torques when quit
+        print("Stopping motors.")
 
 def summarize_config(config):
     # Print summary of configuration to console for tuning purposes
