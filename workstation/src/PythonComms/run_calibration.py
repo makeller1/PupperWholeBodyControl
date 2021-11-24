@@ -1,4 +1,10 @@
-# This code is used to investigate the PID control of a single motor. 
+# This code is used to calibrate the magnetometer and gyroscope of the IMU.
+# Procedure:
+#  1. Start with pupper at rest. Gyroscope bias will be determined now. (5 seconds)
+#  2. After medium beep, rotate pupper so that it's belly follows the surface of a sphere. Magnetometer additive bias will be determined now. (45 seconds)
+#  3. After short beep, repeat step 2. Magnetometer multiplicative bias will be determined now. (45 seconds)
+#  4. After a long beep, calibration is complete. 
+# Note: Teensy must be restarted to run Calibration more than once 
 
 import numpy as np
 import pandas as pd
@@ -26,7 +32,7 @@ def main():
     hardware_interface.zero_motors() 
     print("Zeroing Done")
     
-    # maintain control frequency 
+    # maintain communication frequency 
     dt = .001 # 1000hz
     now = time.time()
     i = 0
