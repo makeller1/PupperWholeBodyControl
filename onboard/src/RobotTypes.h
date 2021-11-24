@@ -6,7 +6,7 @@
 typedef std::array<float, 12> ActuatorPositionVector;
 typedef std::array<float, 12> ActuatorVelocityVector;
 typedef std::array<float, 12> ActuatorCurrentVector;
-typedef std::array<float, 12> ActuatorTorqueVector; // mathew
+typedef std::array<float, 12> ActuatorTorqueVector;
 typedef std::array<bool, 12> ActuatorActivations;
 
 template <class T, unsigned int SIZE>

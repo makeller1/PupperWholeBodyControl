@@ -135,9 +135,7 @@ def main():
             rate.sleep()
 
             # Check if the pupper has faulted
-            if PupComm.check_errors():
-                print("Quitting program")
-                break
+            PupComm.check_errors() # Note: breaking here is not good - somehow causes a delay in the Teensy which affects fault handling
 
             # Break loop when "q" is pressed
             if command.activate_event == 1:

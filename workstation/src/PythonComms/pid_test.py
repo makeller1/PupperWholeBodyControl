@@ -117,6 +117,11 @@ def main():
 
                 #Set_torque actually sets currents
                 hardware_interface.set_torque(WBC_commands_reordered)
+                
+                # Check if the pupper has faulted
+                if PupComm.check_errors():
+                    print("Quitting program")
+                    break
 
                 now = time.time() 
 
@@ -136,10 +141,6 @@ def main():
     except KeyboardInterrupt:
         hardware_interface.set_torque([0]*12) # Zero torques when quit
         print("Stopping motors.")
-
-def summarize_config(config):
-    # Print summary of configuration to console for tuning purposes
-    print("Done.")
 
 if __name__ == "__main__":
     main()

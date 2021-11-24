@@ -134,6 +134,10 @@ class HardwareInterface:
     def set_trq_mode(self):
         self.send_dict({"trq_mode": True})
 
+    def run_calibration(self):
+        # Run IMU calibration
+        self.send_dict({"calibrate_test": True})
+
     def zero_motors(self):
         self.send_dict({"zero": True})
 

@@ -24,8 +24,7 @@ float q0, q1, q2, q3;	// quaternion of sensor frame relative to auxiliary frame
 //---------------------------------------------------------------------------------------------------
 // Function declarations
 
-std::array<float, 4> MadgwickKrisUpdate(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz, double udt);
-// void MadgwickAHRSupdateIMU(float gx, float gy, float gz, float ax, float ay, float az, double dt);
+std::array<float, 4> MadgwickKrisUpdate(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz, float q0, float q1, float q2, float q3, double udt);
 
 #endif
 //=====================================================================================================

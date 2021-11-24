@@ -12,6 +12,7 @@ enum class CheckResultFlag { kNothing, kNewCommand, kError };
 struct CheckResult {
   bool new_torque = false; 
   bool trq_mode_set = false;
+  bool calibrate = false;
   bool new_max_current = false;
   bool new_activation = false;
   bool do_zero = false;
@@ -23,6 +24,7 @@ class CommandInterpreter {
  private:
   ActuatorTorqueVector torque_command_;
   ActuatorPositionVector position_command_;
+
   float max_current_;
   bool trq_mode_set_;
   bool print_debug_info_;
@@ -42,8 +44,6 @@ class CommandInterpreter {
   // result of the read: kNothing, kNewCommand, or kError. Should be called as
   // fast as possible.
   CheckResult CheckForMessages();
-
-  ActuatorPositionVector LatestCartesianPositionCommand();
 
   // Returns an ActuatorTorqueVector with the latest torque commands.
   ActuatorTorqueVector LatestTorqueCommand(); // - mathew
@@ -66,7 +66,7 @@ CommandInterpreter::CommandInterpreter(bool use_msgpack, uint8_t start_byte,
 template <class T, unsigned int SIZE>
 CheckResultFlag CopyJsonArray(JsonArray json, std::array<T, SIZE> &arr) {
   if (json.size() != arr.size()) {
-    Serial << "Error: Invalid number of parameters in position command."
+    Serial << "Error: Invalid number of parameters in command message."
            << endl;
     return CheckResultFlag::kError;
   }
@@ -103,6 +103,15 @@ CheckResult CommandInterpreter::CheckForMessages() {
       result.flag = CheckResultFlag::kNewCommand;
       result.trq_mode_set = true;
       trq_mode_set_ = obj["trq_mode"].as<bool>();
+    }
+    if (obj.containsKey("calibrate"))
+    {
+      // Begin IMU calibration
+      if (obj["calibrate"].as<bool>()) 
+      {
+        result.flag = CheckResultFlag::kNewCommand;
+        result.calibrate = true;
+      }
     }
     if (obj.containsKey("max_current")) 
     {

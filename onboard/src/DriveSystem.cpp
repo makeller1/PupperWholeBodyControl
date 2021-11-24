@@ -7,18 +7,16 @@
 
 DriveSystem::DriveSystem() : front_bus_(), rear_bus_() 
 {
-  control_mode_ = DriveControlMode::kTorqueControl; // - mathew
+  control_mode_ = DriveControlMode::kIdle; //kIdle;
   fault_current_ = 10.0; // Violation sets control mode to kError
   fault_position_array_[0] = PI/4; // PI/4 // hip fault_position
   fault_position_array_[1] = 5.0; // 5.0 shoulder fault_position
   fault_position_array_[2] = 5.0; // 5.0 elbow fault_position
 
   // Default values
+  torques_ = {0,0,0,0,0,0,0,0,0,0,0,0};
   fault_velocity_ = 30.0;  // TODO: Determine if this is reasonable
   max_current_ = 3.0; // Saturates current command
-  velocity_reference_.fill(0.0);
-  current_reference_.fill(
-      0.0);  // TODO: log the commanded current even when in position PID mode
   viol_vel_mask_.fill(false);
   viol_pos_mask_.fill(false);
 
@@ -28,7 +26,7 @@ DriveSystem::DriveSystem() : front_bus_(), rear_bus_()
   q2_ = 0;
   q3_ = 0;
 
-                             // FR0, FR1, FR2                   FL0, FL1, FL2                  BR0,BR1,BR2                    BL0,BL1,BL2     
+  //                              FR0, FR1, FR2                   FL0, FL1, FL2                  BR0,BR1,BR2                    BL0,BL1,BL2     
   //zero_position_offset_ = {.06539, 1.19682, 2.71176,  -.06539, -1.19682, -2.71176,   .06539, 1.19682, 2.71176,    -.06539, -1.19682, -2.71176}; // used to zero pupper laying down
   // zero_position_offset_ = {.1,.2,.3,.4,.5,.6,.7,.8,.9,.10,.11,.12}; // Testing to see mapping
 
@@ -37,7 +35,7 @@ DriveSystem::DriveSystem() : front_bus_(), rear_bus_()
   std::array<float, 12> direction_multipliers = {-1, -1, 1, -1, 1, -1,
                                                  -1, -1, 1, -1, 1, -1};
   direction_multipliers_ = direction_multipliers;
-
+  
 }
 
 void DriveSystem::CheckForCANMessages() 
@@ -86,8 +84,7 @@ DriveControlMode DriveSystem::CheckErrors()
 
 void DriveSystem::SetIdle() 
 { 
-  // Serial << "SetIdle() was called - mathew" << endl; 
-  //control_mode_ = DriveControlMode::kIdle; 
+  control_mode_ = DriveControlMode::kIdle; 
 }
 
 void DriveSystem::ZeroCurrentPosition() 
@@ -115,7 +112,12 @@ void DriveSystem::SetMaxCurrent(float max_current) {
 void DriveSystem::SetTorqueControl()
 {
   ZeroCurrentPosition();
-  control_mode_ = DriveControlMode::kTorqueControl; // Remove this so we stay in other control modes despite commands being sent
+  control_mode_ = DriveControlMode::kTorqueControl; 
+}
+
+void DriveSystem::SetCalibrationControl()
+{
+  control_mode_ = DriveControlMode::kCalibration; 
 }
 
 void DriveSystem::SetTorques(BLA::Matrix<12> torques) 
@@ -146,7 +148,6 @@ void DriveSystem::Update()
   {
     control_mode_ = DriveControlMode::kError;
   }
-
   switch (control_mode_) 
   {
     case DriveControlMode::kError: 
@@ -160,20 +161,36 @@ void DriveSystem::Update()
       CommandCurrents(Utils::VectorToArray<12, 12>(TorqueControl()));
       break;
     }
+    case DriveControlMode::kCalibration:
+    {
+      // Regulate motor velocity during calibration
+      CalibrationControl();
+      break;
+    }
+    case DriveControlMode::kIdle: 
+    {
+      CommandIdle();
+      break;
+    }
   }
 }
 
 void DriveSystem::CommandBraking() 
 {
   // Regulate joint velocity to prevent destructive joint positions or velocities
-  const float Kd = 1.2;
+  const float Kd_viol = 1.2;
+  const float Kd_safe = 0.3;
   ActuatorCurrentVector currents;
   currents.fill(0.0);
   for (size_t i=0; i < kNumActuators; i++)
   {
     if (viol_pos_mask_[i] || viol_vel_mask_[i])
     {
-      currents[i] = -Kd*GetActuatorVelocity(i);
+      currents[i] = -Kd_viol*GetActuatorVelocity(i);
+    }
+    else
+    {
+      currents[i] = -Kd_safe*GetActuatorVelocity(i);
     }
   }
   CommandCurrents(currents);
@@ -184,6 +201,30 @@ void DriveSystem::CommandIdle()
   ActuatorCurrentVector currents;
   currents.fill(0.0);
   CommandCurrents(currents);
+}
+
+void DriveSystem::CalibrationControl()
+{
+  // Regulate joint velocity to make calibration easier
+  static std::array<float,12> e_I = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; // Integral of velocity error
+  static float last_command_ts = micros();
+
+  float now = micros();
+  float dt = (now - last_command_ts)/1000000.0f; 
+
+  const float Kd = 0.6;
+  const float Ki = 1.0;
+
+  ActuatorCurrentVector currents;
+  currents.fill(0.0);
+  for (size_t i=0; i < kNumActuators; i++)
+  {
+      float e = GetActuatorVelocity(i);
+      currents[i] = -Kd*e -Ki*e_I[i];
+      e_I[i] += e*dt;
+  }
+  CommandCurrents(currents);
+  last_command_ts = now;
 }
 
 void DriveSystem::CommandCurrents(ActuatorCurrentVector currents) 
@@ -205,8 +246,7 @@ void DriveSystem::CommandCurrents(ActuatorCurrentVector currents)
   std::array<int32_t, kNumActuators> currents_mA =
       Utils::ConvertToFixedPoint(current_command, 1000);
 
-  //Serial << "Current 0 (mA): " << currents_mA[0] << " Current 1 (mA): " << currents_mA[1] << " Current 2 (mA): " << currents_mA[2] << endl; // - mathew
-  // Send current commands down the CAN buses
+  // Send current commands down the CAN buses (CommandTorques is a misnomer, actually passes currents)
   front_bus_.CommandTorques(currents_mA[0], currents_mA[1], currents_mA[2],
                             currents_mA[3], C610Subbus::kIDZeroToThree);
   front_bus_.CommandTorques(currents_mA[4], currents_mA[5], 0, 0,
@@ -277,7 +317,8 @@ void DriveSystem::PrintMsgPackStatus(DrivePrintOptions options) {
   StaticJsonDocument<2048> doc;
   // 21 micros to put this doc together
   doc["ts"] = millis();
-  for (uint8_t i = 0; i < kNumActuators; i++) {
+  for (uint8_t i = 0; i < kNumActuators; i++) 
+  {
     if (options.positions) {
       doc["pos"][i] = GetActuatorPosition(i);
     }
@@ -287,15 +328,17 @@ void DriveSystem::PrintMsgPackStatus(DrivePrintOptions options) {
     if (options.currents) {
       doc["cur"][i] = GetActuatorCurrent(i);
     }
-    if (options.quaternion){ 
-      doc["quat"][0] = q0_; // w
-      doc["quat"][1] = q1_; // x
-      doc["quat"][2] = q2_; // y
-      doc["quat"][3] = q3_; // z
-    }
-    if (control_mode_ == DriveControlMode::kError){
-      doc["err"] = 1;
-    }
+  }
+  if (options.quaternion)
+  { 
+    doc["quat"][0] = q0_; // w
+    doc["quat"][1] = q1_; // x
+    doc["quat"][2] = q2_; // y
+    doc["quat"][3] = q3_; // z
+  }
+  if (control_mode_ == DriveControlMode::kError)
+  {
+    doc["err"] = 1;
   }
   uint16_t num_bytes = measureMsgPack(doc);
   // Serial.println(num_bytes);

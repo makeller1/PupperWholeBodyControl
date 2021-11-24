@@ -7,8 +7,9 @@
 // Enum for the various control modes: idle, position control, current control
 enum class DriveControlMode {
   kTorqueControl, // setting this first to debug - mathew
-  //kIdle,
-  kError  // For robot errors, not coding mistakes.
+  kIdle,
+  kError, // for handling faults
+  kCalibration
 };
 
 // Default values for which values to pass to workstation. They are modified in main.cpp.
@@ -42,8 +43,6 @@ class DriveSystem {
 
   ActuatorPositionVector zero_position_offset_; // used to zero pupper laying down
   ActuatorPositionVector zero_position_;
-  ActuatorVelocityVector velocity_reference_;
-  ActuatorCurrentVector current_reference_;
 
   BLA::Matrix<12> torques_; // mathew
 
@@ -99,8 +98,13 @@ class DriveSystem {
   // Pass quaternion values
   void SetQuaternions(float q0, float q1, float q2, float q3);
 
-  // Set ControlMode to TorqueControl
+  // Set ControlMode to kTorqueControl
   void SetTorqueControl();
+
+  void SetCalibrationControl();
+
+  // IMU calibration routine
+  void CalibrateIMU(std::array<float, 12>);
 
   // Set torque for all motors.
   void SetTorques(BLA::Matrix<12> torques);
@@ -119,6 +123,9 @@ class DriveSystem {
 
   // Send zero torques to the escs.
   void CommandIdle();
+
+  // Regulates motor velocities during calibration
+  void CalibrationControl();
 
   /*
   The ordering of the torques array goes like this:

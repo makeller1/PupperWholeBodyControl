@@ -14,7 +14,6 @@
 
 //---------------------------------------------------------------------------------------------------
 // Definitions
-#define sampleFreq	512.0f		// sample frequency in Hz (Note: I use dt instead)
 #define beta 0.1f // 2 * proportional gain (Kp)						
 
 // Functions
@@ -116,8 +115,6 @@ std::array<float, 4> MadgwickUpdate(float gx, float gy, float gz, float ax, floa
 
             return {q0,q1,q2,q3};
 }
-
-
 
 //====================================================================================================
 // END OF CODE

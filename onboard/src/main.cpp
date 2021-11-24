@@ -5,17 +5,30 @@
 #include "DriveSystem.h"
 #include "Utils.h"
 #include "ICM_20948.h"
+#include "Calibration.h"
+#include <EEPROM.h>
 
 const int CONTROL_DELAY = 1000;//1000;  // micros - mathew (Setting this to 10 results in CAN error)
 const int OBSERVE_DELAY = 1000;//1000; // micros
 const float MAX_CURRENT = 1.0; // Amps - Default saturation value, is changed by run_djipupper
 
 const bool send_robot_states = true; // This is needed to send motor / IMU data over serial - mathew
-
+const bool print_cal_params = false; // Used to print the calibration parameters stored in persistent mem
 bool print_debug_info = false; 
 
 const bool ECHO_COMMANDS = false; // Set true for debugging
-const bool AHRS_ENABLED = false; // Are we running with the AHRS/IMU enabled?
+const bool AHRS_ENABLED = true; // Are we running with the AHRS/IMU enabled?
+
+// Calibration parameters
+float b_gyr_x = 0.0f;
+float b_gyr_y = 0.0f;
+float b_gyr_z = 0.0f;
+float b_mag_x = 0.0f;
+float b_mag_y = 0.0f;
+float b_mag_z = 0.0f;
+float s_mag_x = 0.0f;
+float s_mag_y = 0.0f;
+float s_mag_z = 0.0f;
 
 ////////////////////// SETUP IMU ////////////////////////
 #define WIRE_PORT Wire
@@ -24,21 +37,11 @@ const bool AHRS_ENABLED = false; // Are we running with the AHRS/IMU enabled?
                         // the ADR jumper is closed the value becomes 0
 ICM_20948_I2C myICM;  //create an ICM_20948_I2C object
 
-// To do: Translate calibration routine to C++ and write values to EEPROM
-// magnetometer bias: corrected_i = measurement_i - bias_i (units: uT)
-const float bx = 63.4891;
-const float by = .2232;
-const float bz = -15.35;
-// Gyro at rest noise bias: corrected_i = measurement_i - bias_i (units: deg/s)
-const float bgx = .2376;
-const float bgy = -.0141;
-const float bgz = .1368;
-
 // Quaternions
 std::array<float,4> quats = {1.0f, 0.0f, 0.0f, 0.0f};
 
-float lastUpdate = 0; // uint32_t
-float now = 0; // uint32_t
+float lastUpdate = 0.0f;
+float now = 0.0f;
 float dt = 0.0f;
 bool debug = false;
 
@@ -59,6 +62,7 @@ DrivePrintOptions options;
 
 long last_command_ts;
 long last_print_ts;
+long last_cal_print_ts;
 long last_header_ts;
 
 void setup(void) {
@@ -72,6 +76,18 @@ void setup(void) {
     digitalWrite(13, LOW);
     delay(125);
   }
+
+  // Read calibration parameters from EEPROM
+  std::array<float,9> calib_params = ReadParams();
+  b_gyr_x = calib_params[0];
+  b_gyr_y = calib_params[1];
+  b_gyr_z = calib_params[2];
+  b_mag_x = calib_params[3];
+  b_mag_y = calib_params[4];
+  b_mag_z = calib_params[5];
+  s_mag_x = calib_params[6];
+  s_mag_y = calib_params[7];
+  s_mag_z = calib_params[8];
 
   if (AHRS_ENABLED){
     // Setup AHRS
@@ -119,16 +135,14 @@ void setup(void) {
   options.delimiter = ',';
   options.positions = true;
   options.velocities = true;
-  options.currents = true;             // last actual current
+  options.currents = true; // last actual current
   if (!AHRS_ENABLED){
     options.quaternion = false;
   }
 
   interpreter.Flush();
-  drive.SetTorqueControl(); // Redundant since this occurs in drive initialization, but good to keep in mind
+  drive.SetTorqueControl(); 
   drive.ZeroCurrentPosition();
-  BLA::Matrix<12> torques_start = {0,0,0,0,0,0,0,0,0,0,0,0};
-  drive.SetTorques(torques_start); // This also puts control mode in torque control
 }
 
 void loop() 
@@ -153,10 +167,6 @@ void loop()
     if (r.new_max_current) 
     {
       drive.SetMaxCurrent(interpreter.LatestMaxCurrent());
-      if (ECHO_COMMANDS) 
-      {
-        Serial << "Max Current: " << interpreter.LatestMaxCurrent() << endl;
-      }
     }
     if (r.do_zero) 
     {
@@ -169,6 +179,20 @@ void loop()
     if (r.new_debug) 
     {
       print_debug_info = interpreter.LatestDebug();
+    }
+    if (r.calibrate)
+    {
+      std::array<float,6> gyro_mag_meas = {myICM.magX(), myICM.magY(), myICM.magZ(), myICM.gyrX(), myICM.gyrY(), myICM.gyrZ()};
+      bool cal_complete = CalibrateIMU(gyro_mag_meas);
+
+      if (cal_complete)
+      {
+        drive.SetIdle();
+      }
+      else
+      {
+        drive.SetCalibrationControl();
+      }
     }
   }
 
@@ -192,12 +216,29 @@ void loop()
       dt = ((now - lastUpdate)/1000000.0f); 
       lastUpdate = now;
 
-      // It's recommended by the filter author to run the algorithm update 5x for each sample update: https://github.com/kriswiner/MPU9250
-      // He accomplishes this by using interrupts when new data is available from the sensors.
-      quats = MadgwickUpdate(myICM.gyrX()-bgx, myICM.gyrY()-bgy, myICM.gyrZ()-bgz, myICM.accX(), myICM.accY(), myICM.accZ(), myICM.magX()-bx, -(myICM.magY()-by), -(myICM.magZ()-bz),quats[0],quats[1],quats[2],quats[3], dt);
+      // Update filter
+      quats = MadgwickUpdate(myICM.gyrX()-b_gyr_x, myICM.gyrY()-b_gyr_y, myICM.gyrZ()-b_gyr_z, myICM.accX(), myICM.accY(), myICM.accZ(), 
+                            (myICM.magX()-b_mag_x)*s_mag_x, -(myICM.magY()-b_mag_y)*s_mag_y, -(myICM.magZ()-b_mag_z)*s_mag_z,quats[0],quats[1],quats[2],quats[3], dt);
 
       // Send quaternion values to DriveSystem
       drive.SetQuaternions(quats[0],quats[1],quats[2],quats[3]);
+    }
+  }
+
+  // Check parameters stored in EEPROM
+  if (print_cal_params) 
+  {
+    std::array<float,9> calib_params = ReadParams();
+    std::array<float,3> mag_data = {myICM.magX(), myICM.magY(), myICM.magZ()};
+    float meanmag = CheckCalMag(mag_data, calib_params);
+    if (micros() - last_cal_print_ts >= 1000000)
+    {
+      std::array<float,9> params = ReadParams();
+      Serial << "Parameters: b_gyro: "<< params[0] << ", " << params[1] << ", " << params[2] << endl; 
+      Serial << "Parameters: b_mag : "<< params[3] << ", " << params[4] << ", " << params[5] << endl;
+      Serial << "Parameters: s_mag : "<< params[6] << ", " << params[7] << ", " << params[8] << endl; 
+      Serial << "Normalized magnetometer magnitude: " << meanmag << endl;
+      last_cal_print_ts = micros();
     }
   }
 
