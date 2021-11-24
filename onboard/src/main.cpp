@@ -20,15 +20,15 @@ const bool ECHO_COMMANDS = false; // Set true for debugging
 const bool AHRS_ENABLED = true; // Are we running with the AHRS/IMU enabled?
 
 // Calibration parameters
-float b_gyr_x = 0.0f;
-float b_gyr_y = 0.0f;
-float b_gyr_z = 0.0f;
-float b_mag_x = 0.0f;
-float b_mag_y = 0.0f;
-float b_mag_z = 0.0f;
-float s_mag_x = 0.0f;
-float s_mag_y = 0.0f;
-float s_mag_z = 0.0f;
+float b_gyr_x;
+float b_gyr_y;
+float b_gyr_z;
+float b_mag_x;
+float b_mag_y;
+float b_mag_z;
+float s_mag_x;
+float s_mag_y;
+float s_mag_z;
 
 ////////////////////// SETUP IMU ////////////////////////
 #define WIRE_PORT Wire
