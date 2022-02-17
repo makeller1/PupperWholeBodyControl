@@ -6,9 +6,6 @@
 #  4. After a long beep, calibration is complete. 
 # Note: Teensy must be restarted to run Calibration more than once 
 
-import numpy as np
-import pandas as pd
-
 import time
 from SerialInterface import HardwareInterface
 from SerialInterface.IndividualConfig import SERIAL_PORT  # make the configs more consistent

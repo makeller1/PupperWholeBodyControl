@@ -57,6 +57,8 @@ public:
 
     // Get the torque command fulfilling the current tasks
     std::array<float, 12> calculateOutputTorque();
+    // Get the desired joint (motor) accelerations fulfilling the current tasks
+    std::array<float, 12> getDesiredAccel();
 
 private:
     // The Pupper model for RBDL
@@ -91,6 +93,8 @@ private:
 
     // Control torques in Nm
     VectorNd control_torques_;
+    // Desired joint (motor) accelerations in m/s^2
+    VectorNd control_qddot_;
 
     // Body ids of lower links 
     uint back_left_lower_link_id_;

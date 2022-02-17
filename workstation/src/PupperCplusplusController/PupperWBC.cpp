@@ -54,6 +54,7 @@ PupperWBC::PupperWBC(){
     joint_angles_     = VectorNd::Zero(NUM_Q);
     joint_velocities_ = VectorNd::Zero(NUM_JOINTS);
     control_torques_  = VectorNd::Zero(NUM_JOINTS);
+    control_qddot_ = VectorNd::Zero(ROBOT_NUM_JOINTS);
     robot_position_   = VectorNd::Zero(3);
     feet_in_contact_ = {true, true, true, true};
 
@@ -275,6 +276,9 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
 
     // Solve for the command torques
     VectorNd tau = (massMat_*q_ddot + b_g_ - Jc_.transpose()*F_r).tail(ROBOT_NUM_JOINTS);
+    // Store desired joint accelerations
+    control_qddot_ = q_ddot.tail(ROBOT_NUM_JOINTS);
+
     // cout << "Back left hip control torque: " << tau(0) << endl;
     // cout<< "Torques: " << endl;
     // for (int i = 0; i < tau.size(); i++){
@@ -342,6 +346,12 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
 
     array<float, 12> output;
     std::copy(tau.data(), tau.data() + tau.size(), output.data());
+    return output;
+}
+
+array<float, 12> PupperWBC::getDesiredAccel(){
+    array<float, 12> output;
+    std::copy(control_qddot_.data(), control_qddot_.data() + control_qddot_.size(), output.data());
     return output;
 }
 

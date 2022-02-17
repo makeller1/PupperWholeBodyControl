@@ -20,8 +20,9 @@ from utilities import trq_to_current
 
 class Data:
     def __init__(self):
-        # Create a list to hold the joint commands to send to the pupper
-        self.commands = [0.0]*12
+        # Create a list to hold the torque commands to send to the pupper
+        self.trq_commands = [0.0]*12
+        self.dir_commands = [False]*12
 
 def main():
     """Main program"""
@@ -45,8 +46,10 @@ def main():
 
     # Define the message callback
     def commandCallback(msg):
-        data.commands = list(msg.data)
-    
+        commands = list(msg.data)
+        data.trq_commands = commands[:12]
+        data.dir_commands = list(np.array(commands[12:]) > 0)
+
     # Create the ROS subscriber and publisher
     state_pub   = rospy.Publisher("pupper_state", JointState, queue_size=1)
     pose_pub    = rospy.Publisher("pupper_pose", Pose, queue_size=1)
@@ -106,22 +109,24 @@ def main():
             #Send Orientation to the C++ node
             pose_pub.publish(pose_msg)
             
-            # Read torque command from ROS
-            WBC_commands = data.commands
+            # Read torque and accel direction command from ROS
+            WBC_trq_commands = data.trq_commands
+            WBC_dir_commands = data.dir_commands
 
-            # Override torque command for TESTING
-            WBC_commands[9] = .5
+            # For Testing : Override torque command
+            # WBC_commands[9] = .5
 
             # Tranform to Teensy's frame
-            WBC_commands_reordered = PupComm.reorder_commands(WBC_commands)  
-
+            WBC_trq_reordered = PupComm.reorder_commands(WBC_trq_commands)
+            WBC_dir_reordered = PupComm.reorder_commands(WBC_dir_commands)
             # -------------------------------------------
             # -------- Send torques to pupper ---------- 
             # ------------------------------------------- 
             for i in range(12):
                 # Convert torque to current
-                torque_cmd = WBC_commands_reordered[i]
-                q_ddot_des = 1 #Direction of desired acceleration TODO: !!! pass desired acceleration through ROS node !!!
+                torque_cmd = WBC_trq_reordered[i] #Desired torque
+                q_ddot_des = WBC_dir_reordered[i] #Direction of desired acceleration
+
                 vel = PupComm.robot_states_["vel"][i]
                 current_commands[i] = trq_to_current(torque_cmd, q_ddot_des, vel)
                 if i == 0:

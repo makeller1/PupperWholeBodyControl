@@ -152,8 +152,8 @@ int main(int argc, char** argv){
 
     // ================================================================= //
 
-    // Run controller at 100 Hz
-    ros::Rate rate(100);  
+    // Run controller at 1000 Hz
+    ros::Rate rate(1000);  
 
     // Zero the globals
     body_pos_.setZero();
@@ -166,8 +166,9 @@ int main(int argc, char** argv){
     std::array<bool, 4> contacts = {true, true, true, true};
 
     // Create the ROS message that we will be sending back to the Python node
+    // top 12 are torque commands, bottom 12 are desired joint accelerations
     std_msgs::Float64MultiArray command_msg;
-    command_msg.data.resize(12);
+    command_msg.data.resize(24);
 
     // Wait for messages
     ROS_INFO("Waiting for initial message...");
@@ -204,9 +205,11 @@ int main(int argc, char** argv){
         Pup.updateBodyPosTask("FRONT_RIGHT_FOOT_POSITION", Pup.getRelativeBodyLocation("front_right_foot"));
         // Run the IHWBC
         array<float,12> tau = Pup.calculateOutputTorque();
-
+        array<float,12> q_ddot_des = Pup.getDesiredAccel();
+        
         // Send commands
         std::copy(tau.begin(), tau.end(), command_msg.data.data());
+        std::copy(q_ddot_des.begin(), q_ddot_des.end(), command_msg.data.data() + tau.size());
         RobotCommandPub.publish(command_msg);
 
         rate.sleep();
