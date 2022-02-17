@@ -47,7 +47,12 @@ sudo apt install ros-noetic-gazebo-ros
 	```
 # Running WBC in simulation
 1. Build the WBC C++ code using the steps above
-2. Open a terminal and run
+2. Add the following line to your .bashrc (or run in the current shell)
+	```
+	# Point gazebo to plugin path
+	export GAZEBO_PLUGIN_PATH=/home/mathew/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/plugins/build
+	```
+4. Open a terminal and run
 	```
 	roslaunch workstation load_pupper.launch
 	```
