@@ -50,7 +50,7 @@ sudo apt install ros-noetic-gazebo-ros
 2. Add the following line to your .bashrc (or run in the current shell)
 	```
 	# Point gazebo to plugin path
-	export GAZEBO_PLUGIN_PATH=/home/mathew/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/plugins/build
+	export GAZEBO_PLUGIN_PATH=~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/plugins/build
 	```
 5. Open a terminal and run
 	```
