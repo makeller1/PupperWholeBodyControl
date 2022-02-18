@@ -55,6 +55,9 @@ sudo apt install ros-noetic-gazebo-ros
 5. Open a terminal and run
 	```
 	roscore
+	```
+6. Open a terminal and run
+	```
 	roslaunch workstation load_pupper.launch
 	```
 # Running WBC on Pupper
