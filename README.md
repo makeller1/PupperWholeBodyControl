@@ -42,7 +42,7 @@ sudo apt install ros-noetic-gazebo-ros
 3. Run
 	```
 	cd build
-	catkin build # build library containing PupperWBC.cpp and PupperModel.cpp
+	catkin build #build library containing PupperWBC.cpp and PupperModel.cpp
 	cmake ..
 	make -j
 	```
