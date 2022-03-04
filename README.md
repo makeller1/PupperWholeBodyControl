@@ -42,12 +42,22 @@ sudo apt install ros-noetic-gazebo-ros
 3. Run
 	```
 	cd build
+	catkin build #build library containing PupperWBC.cpp and PupperModel.cpp
 	cmake ..
 	make -j
 	```
 # Running WBC in simulation
 1. Build the WBC C++ code using the steps above
-2. Open a terminal and run
+2. Add the following line to your .bashrc (or run in the current shell)
+	```
+	# Point gazebo to plugin path
+	export GAZEBO_PLUGIN_PATH=~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/plugins/build
+	```
+5. Open a terminal and run
+	```
+	roscore
+	```
+6. Open a terminal and run
 	```
 	roslaunch workstation load_pupper.launch
 	```
