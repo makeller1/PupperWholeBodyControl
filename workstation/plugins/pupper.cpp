@@ -36,17 +36,17 @@ PupperPlugin::PupperPlugin(){
     static Task CoM_Position_Task;
     CoM_Position_Task.type    = BODY_POS;
     CoM_Position_Task.body_id = "bottom_PCB";
-    CoM_Position_Task.task_weight = 1; // 1
+    CoM_Position_Task.task_weight = 10; // 1
     CoM_Position_Task.active_targets = {false, false, true};    // only account for z-position
-    CoM_Position_Task.pos_target << 0, 0, 0.10;
-    CoM_Position_Task.Kp = 200;//1000;
+    CoM_Position_Task.pos_target << 0, 0, 0.09; // .10
+    CoM_Position_Task.Kp = 400;//200;
     CoM_Position_Task.Kd = 200;
 
     // Task for Body center of mass to be flat // .001
     static Task CoM_Orientation_Task;
     CoM_Orientation_Task.type    = BODY_ORI;
     CoM_Orientation_Task.body_id = "bottom_PCB";
-    CoM_Orientation_Task.task_weight = 10; // 0.7;
+    CoM_Orientation_Task.task_weight = 100; // 10;
     CoM_Orientation_Task.quat_target = Eigen::Quaternion<double>::Identity();
     CoM_Orientation_Task.Kp = 1000;//1000;
     CoM_Orientation_Task.Kd = 200;
@@ -60,8 +60,8 @@ PupperPlugin::PupperPlugin(){
     JointPositionTask.Kd = 200;
 
     float foot_pos_Kp = 10;
-    float foot_pos_Kd = 10;
-    float foot_pos_w  = 1;
+    float foot_pos_Kd = 5;
+    float foot_pos_w  = 3;
 
     // Keep the front left foot in place
     static Task FLFootTask;
@@ -204,16 +204,14 @@ void PupperPlugin::onUpdate(){
     // float target_roll = M_PI/12 * sin(0.5 * dTime); // 0.5 HZ (2 sec)
     // WBC_.getTask("COM_ORIENTATION")->quat_target = Eigen::AngleAxisd(target_roll, Eigen::Vector3d::UnitX());
 
-    // First two seconds
+    // First 2 seconds
     if (now - start_time < common::Time(2, 0)){
         setJointPositions(test_angles);
     }
-
-    // // Fall (hopefully) gracefully
-    // else if (now - start_time < common::Time(5, 0)){
-    //     std::fill(control_torques_.begin(), control_torques_.end(), 0);
-    // }
-
+    // Fall (hopefully) gracefully
+    else if (now - start_time < common::Time(5, 0)){
+        std::fill(control_torques_.begin(), control_torques_.end(), 0);
+    }
     //Manage publisher update rate
     else if (now - last_update_time_ > update_interval_){
         // Get the robot state from the simulation
@@ -318,6 +316,9 @@ void PupperPlugin::updateBody_(){
     body_COM_[1] = body_pose.Pos().Y();
     body_COM_[2] = body_pose.Pos().Z();
 
+    cout << "Z measured  : " << body_COM_[2] << endl;
+    cout << "Z calculated: " << WBC_.calcPupperHeight() << endl;
+
     body_quat_.x() = body_pose.Rot().X();
     body_quat_.y() = body_pose.Rot().Y();
     body_quat_.z() = body_pose.Rot().Z();
@@ -330,8 +331,7 @@ void PupperPlugin::updateBody_(){
 
 // Tell the controller the current state of the robot
 void PupperPlugin::updateController_(){
-    // WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, {0, 0, 0, 0});
-    WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, {true,true,true,true});
+    WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, feet_in_contact_);
     WBC_.updateBodyPosTask("COM_POSITION", body_COM_);
     WBC_.updateBodyOriTask("COM_ORIENTATION", body_quat_);
     VectorNd jointPos(12);
@@ -352,7 +352,8 @@ void PupperPlugin::updateController_(){
 // =========================================================================================
 
 void PupperPlugin::contactCallback_(ConstContactsPtr &_msg){
-
+    
+    cout << "contactCallback_ has been called." << endl;
     static const array<string,4> collision_names = {
         "pupper::back_left_lower_link::",
         "pupper::back_right_lower_link:",
@@ -368,8 +369,8 @@ void PupperPlugin::contactCallback_(ConstContactsPtr &_msg){
                     feet_in_contact_[i] = true;
     }
 
-    //Debug: print contacts in order (BL, BR, FL, FR)
-    // cout << "{";
+    // //Debug: print contacts in order (BL, BR, FL, FR)
+    // cout << "Feet contacts : {";
     // for (bool b : feet_in_contact_){
     //     cout << b << ", ";
     // }

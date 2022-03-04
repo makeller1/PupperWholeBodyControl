@@ -25,7 +25,7 @@ namespace {
         VectorNd error3d = VectorNd::Zero(3);
         error3d = error.vec() * error.w()/abs(error.w());
         // Remove yaw component 
-        error3d(2) *= 0.1;
+        // error3d(2) *= 0.1;
         return error3d;
     }
 
@@ -262,6 +262,7 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
     VectorNd upper_bounds = VectorNd::Zero(38);
 
     // Solve for q_ddot and reaction forces
+    cout << "FORMING QP ---------------------------------------------" << endl;
     formQP(P, q, A, lower_bounds, upper_bounds);
     VectorNd optimal_solution = solveQP(A.cols(), A.rows(), P, q.data(), A, lower_bounds.data(), upper_bounds.data());
     
@@ -510,12 +511,12 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     //       Set weights in main function
 
     // Parameters
-    double lambda_t = 0.0001; // Penalizes high joint accelerations
+    double lambda_q = 0.0001; // Penalizes high joint accelerations
     VectorNd rf_desired = VectorNd::Zero(12);// Desired reaction forces
-    rf_desired << 1,-1,7.5, 1,1,7.5, -1,-1,5.5, -1,1,5.5; // Note: 6.5 back and 4.5 front was really close to standing
+    rf_desired << 1,-1,5.5, 1,1,5.5, -1,-1,5.5, -1,1,5.5; // Note: 6.5 back and 4.5 front was really close to standing
     double lambda_rf_z = 0; // Normal reaction force penalty (minimize impacts)
-    double lambda_rf_xy = 100; // Tangential reaction force penalty (minimize slipping)
-    double w_rf = 15; // Reaction force tracking penalty (follow desired reaction force)
+    double lambda_rf_xy = 0; // Tangential reaction force penalty (minimize slipping)
+    double w_rf = 0; // Reaction force tracking penalty (follow desired reaction force)
     double mu = .1; // Coefficient of friction 
 
     // ---------------------------------------------------------------
@@ -565,7 +566,9 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
                 break;
 
         }
-        cout << "xddot for " << T->body_id << " :" << x_ddot_desired.transpose().format(f) << endl;
+        // cout << "xddot for " << T->body_id << " :" << x_ddot_desired.transpose().format(f) << endl;
+
+
         // cout << "j.transpose() size: (" << j.transpose().rows() << "x" << j.transpose().cols() << ")\n";
         // cout << "x_ddot_desired size: " << x_ddot_desired.size() << endl;
 
@@ -585,7 +588,7 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
 
     // Add a cost to penalize high joint accelerations
     for (int i = 6; i < NUM_JOINTS; i++){
-        cost_t_mat(i,i) += lambda_t;
+        cost_t_mat(i,i) += lambda_q;
     }
 
     // Form reaction force cost matrix and vector
@@ -631,7 +634,7 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     // Torque is given by the equation tau = A*q_ddot + b_g - Jc^T * Fr
     // Hence we get the form:
     //
-    //            tau - b_g = [A, Jc^T] * [q_ddot, Fr]^T
+    //            tau - b_g = [A, -Jc^T] * [q_ddot; Fr]
     //
     // For the floating base joints we have         0 <= tau <= 0       
     // For the rest of the joints we have    -tau_lim <= tau <= +tau_lim
@@ -644,7 +647,7 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     torque_lower_limit.tail(ROBOT_NUM_JOINTS) = -b_g_.tail(ROBOT_NUM_JOINTS) - torque_limit * VectorNd::Ones(ROBOT_NUM_JOINTS);
     torque_upper_limit.tail(ROBOT_NUM_JOINTS) = -b_g_.tail(ROBOT_NUM_JOINTS) + torque_limit * VectorNd::Ones(ROBOT_NUM_JOINTS);
 
-    // Fill in the A matrix of the form [A, Jc^T]
+    // Fill in the A matrix of the form [A, -Jc^T]
     MatrixNd torque_limit_mat(NUM_JOINTS, NUM_JOINTS + 12);
     torque_limit_mat << massMat_, -Jc_.transpose();
 
@@ -659,7 +662,7 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
 
     double rf_z_max = 100; // Max normal reaction force
     MatrixNd reaction_force_mat = MatrixNd::Zero(20, NUM_JOINTS + 12); // Block matrix to store inequality matrix 20x30
-    MatrixNd A_fr = MatrixNd::Zero(20,12); // Inequality matrix for reaction forces (3 for Fr_z, 12 for Fr_x/Fr_z)
+    MatrixNd A_fr = MatrixNd::Zero(20,12); // Inequality matrix for reaction forces (12 for Fr_z, 8 for Fr_x/Fr_z)
     VectorNd reaction_force_lower_limit = VectorNd::Zero(20); // Min reaction force (zero for normal reaction forces)
     VectorNd reaction_force_upper_limit = VectorNd::Zero(20); // Max reaction force 
 
@@ -704,7 +707,7 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     A_fr(15,10) = 1;  // y_2_4
     A_fr(15,11) = mu;
     
-    // Constraints on Fr_z
+    // For constraints on Fr_z
     A_fr(16,2) = 1;
     A_fr(17,5) = 1;
     A_fr(18,8) = 1;
@@ -747,10 +750,29 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     reaction_force_upper_limit(15) = OSQP_INFTY;
 
     // Max normal reaction force
-    reaction_force_upper_limit(16) = rf_z_max;
-    reaction_force_upper_limit(17) = rf_z_max;
-    reaction_force_upper_limit(18) = rf_z_max;
-    reaction_force_upper_limit(19) = rf_z_max;
+    // reaction_force_upper_limit(16) = rf_z_max;
+    // reaction_force_upper_limit(17) = rf_z_max;
+    // reaction_force_upper_limit(18) = rf_z_max;
+    // reaction_force_upper_limit(19) = rf_z_max;
+
+    // Max normal reaction force
+    for (int i=0; i<4; i++){
+        if (!feet_in_contact_[i]){
+            // Constrain reaction force to zero for floating feet
+            reaction_force_upper_limit(i+16) = 0; 
+        }
+        else{
+            // Constrain reaction force to rf_z_max for contacting feet
+            reaction_force_upper_limit(i+16) = rf_z_max;
+        }
+    }
+
+    //Debug: print contacts in order (BL, BR, FL, FR)
+    cout << "Feet contacts : {";
+    for (bool b : feet_in_contact_){
+        cout << b << ", ";
+    }
+    cout << "}" << endl;
 
     reaction_force_mat.rightCols(12) = A_fr;
 
@@ -761,14 +783,6 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     u.head(NUM_JOINTS) = torque_upper_limit;
     l.tail(20) = reaction_force_lower_limit;
     u.tail(20) = reaction_force_upper_limit;
-
-    // THIS IS CURRENTLY NOT CORRECT
-    // force Fr = 0 in x,y and z for swinging feet
-    for (int i=0; i<4; i++){
-        if (!feet_in_contact_[i]){
-            //reaction_force_upper_limit.segment(i*3,3) = VectorNd::Zero(3); 
-        }
-    }
 
     // cout << "P size: " << P.rows() << "x" << P.cols() << endl;
     // cout << "A size: " << A.rows() << "x" << A.cols() << endl;
