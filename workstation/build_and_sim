@@ -1,0 +1,9 @@
+#!/bin/bash
+#Build code and run Gazebo simulation
+#Note: roscore must be running.
+cd ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/plugins/build
+catkin build # build library containing PupperWBC.cpp and PupperModel.cpp
+cmake ..
+make -j
+
+roslaunch workstation load_pupper.launch
