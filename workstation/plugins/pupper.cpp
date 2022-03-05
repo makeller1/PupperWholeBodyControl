@@ -1,7 +1,6 @@
 #include "pupper.hpp"
 #include "workstation/PupperModel.h"
 #include "workstation/PupperUrdfString.hpp"
-
 #include <iostream>
 
 using std::cout;
@@ -59,49 +58,52 @@ PupperPlugin::PupperPlugin(){
     JointPositionTask.Kp = 200;
     JointPositionTask.Kd = 200;
 
-    float foot_pos_Kp = 10;
-    float foot_pos_Kd = 5;
-    float foot_pos_w  = 3;
+    foot_pos_Kp_ = 10;
+    foot_pos_Kd_ = 5;
+    foot_pos_w_  = 3;
+    float_pos_Kp_ = 50; //50
+    float_pos_Kd_ = 0; // 0
+    float_pos_w_  = 50;
 
     // Keep the front left foot in place
     static Task FLFootTask;
     FLFootTask.type = BODY_POS;
     FLFootTask.body_id = "front_left_foot";
-    FLFootTask.task_weight = foot_pos_w;
+    FLFootTask.task_weight = foot_pos_w_;
     FLFootTask.active_targets = {true, true, false};  // We'll let the COM task take care of heigh
     FLFootTask.pos_target << 0.08, 0.075, -0.1;
-    FLFootTask.Kp = foot_pos_Kp;
-    FLFootTask.Kd = foot_pos_Kd;
+    FLFootTask.Kp = foot_pos_Kp_;
+    FLFootTask.Kd = foot_pos_Kd_;
 
     // Keep the front right foot in place
     static Task FRFootTask;
     FRFootTask.type = BODY_POS;
     FRFootTask.body_id = "front_right_foot";
-    FRFootTask.task_weight = foot_pos_w;
+    FRFootTask.task_weight = foot_pos_w_;
     FRFootTask.active_targets = {true, true, false};  // We'll let the COM task take care of heigh
     FRFootTask.pos_target << 0.08, -0.065, -0.1;
-    FRFootTask.Kp = foot_pos_Kp;
-    FRFootTask.Kd = foot_pos_Kd;
+    FRFootTask.Kp = foot_pos_Kp_;
+    FRFootTask.Kd = foot_pos_Kd_;
 
     // Keep the back left foot in place
     static Task BLFootTask;
     BLFootTask.type = BODY_POS;
     BLFootTask.body_id = "back_left_foot";
-    BLFootTask.task_weight = foot_pos_w;
+    BLFootTask.task_weight = foot_pos_w_;
     BLFootTask.active_targets = {true, true, false};  // We'll let the COM task take care of heigh
     BLFootTask.pos_target << -0.11, 0.075, -0.1;
-    BLFootTask.Kp = foot_pos_Kp;
-    BLFootTask.Kd = foot_pos_Kd;
+    BLFootTask.Kp = foot_pos_Kp_;
+    BLFootTask.Kd = foot_pos_Kd_;
 
     // Keep the back right foot in place
     static Task BRFootTask;
     BRFootTask.type = BODY_POS;
     BRFootTask.body_id = "back_right_foot";
-    BRFootTask.task_weight = foot_pos_w;
+    BRFootTask.task_weight = foot_pos_w_;
     BRFootTask.active_targets = {true, true, false};  // We'll let the COM task take care of heigh
     BRFootTask.pos_target << -0.11, -0.065, -0.1;
-    BRFootTask.Kp = foot_pos_Kp;
-    BRFootTask.Kd = foot_pos_Kd;
+    BRFootTask.Kp = foot_pos_Kp_;
+    BRFootTask.Kd = foot_pos_Kd_;
 
     WBC_.addTask("COM_POSITION", &CoM_Position_Task);
     WBC_.addTask("COM_ORIENTATION", &CoM_Orientation_Task);
@@ -188,7 +190,7 @@ void PupperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 
 // Called on every simulation time step
 void PupperPlugin::onUpdate(){
-    static vector<float> test_angles = { 0.0,  M_PI_4,  M_PI_2, 
+    static vector<float> init_angles = { 0.0,  M_PI_4,  M_PI_2, 
                                          0.0, -M_PI_4, -M_PI_2,
                                          0.0,  M_PI_4,  M_PI_2,
                                          0.0, -M_PI_4, -M_PI_2};
@@ -196,17 +198,17 @@ void PupperPlugin::onUpdate(){
     common::Time now = common::Time::GetWallTime();
     double dTime = now.Double();
 
-    // Oscillate COM height task
+    // // Oscillate COM height task
     // float target_height = 0.12 + 0.02*sin(0.5*dTime); // 0.5 Hz (2 sec)
     // WBC_.getTask("COM_POSITION")->pos_target.z() = target_height; 
 
-    // Oscillate left/right tilt
+    // // Oscillate left/right tilt
     // float target_roll = M_PI/12 * sin(0.5 * dTime); // 0.5 HZ (2 sec)
     // WBC_.getTask("COM_ORIENTATION")->quat_target = Eigen::AngleAxisd(target_roll, Eigen::Vector3d::UnitX());
 
     // First 2 seconds
     if (now - start_time < common::Time(2, 0)){
-        setJointPositions(test_angles);
+        setJointPositions(init_angles);
     }
     // Fall (hopefully) gracefully
     else if (now - start_time < common::Time(5, 0)){
@@ -317,7 +319,7 @@ void PupperPlugin::updateBody_(){
     body_COM_[2] = body_pose.Pos().Z();
 
     cout << "Z measured  : " << body_COM_[2] << endl;
-    cout << "Z calculated: " << WBC_.calcPupperHeight() << endl;
+    cout << "Z calculated: " << WBC_.getCalculatedHeight() << endl;
 
     body_quat_.x() = body_pose.Rot().X();
     body_quat_.y() = body_pose.Rot().Y();
@@ -332,15 +334,16 @@ void PupperPlugin::updateBody_(){
 // Tell the controller the current state of the robot
 void PupperPlugin::updateController_(){
     WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, feet_in_contact_);
+    // WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, {true,true,true,true});
     WBC_.updateBodyPosTask("COM_POSITION", body_COM_);
     WBC_.updateBodyOriTask("COM_ORIENTATION", body_quat_);
     VectorNd jointPos(12);
     std::copy(joint_positions_.data(), joint_positions_.data() + 12, jointPos.data());
     WBC_.updateJointTask("JOINT_ANGLES", jointPos);
-    WBC_.updateBodyPosTask("FRONT_LEFT_FOOT_POSITION",  WBC_.getRelativeBodyLocation("front_left_foot"));
-    WBC_.updateBodyPosTask("FRONT_RIGHT_FOOT_POSITION", WBC_.getRelativeBodyLocation("front_right_foot"));
     WBC_.updateBodyPosTask("BACK_LEFT_FOOT_POSITION",   WBC_.getRelativeBodyLocation("back_left_foot"));
     WBC_.updateBodyPosTask("BACK_RIGHT_FOOT_POSITION",  WBC_.getRelativeBodyLocation("back_right_foot"));
+    WBC_.updateBodyPosTask("FRONT_LEFT_FOOT_POSITION",  WBC_.getRelativeBodyLocation("front_left_foot"));
+    WBC_.updateBodyPosTask("FRONT_RIGHT_FOOT_POSITION", WBC_.getRelativeBodyLocation("front_right_foot"));
     // cout << "COM height to ground = " << body_COM_[2] << endl;
 }
 
@@ -353,7 +356,6 @@ void PupperPlugin::updateController_(){
 
 void PupperPlugin::contactCallback_(ConstContactsPtr &_msg){
     
-    cout << "contactCallback_ has been called." << endl;
     static const array<string,4> collision_names = {
         "pupper::back_left_lower_link::",
         "pupper::back_right_lower_link:",
@@ -368,6 +370,33 @@ void PupperPlugin::contactCallback_(ConstContactsPtr &_msg){
                 if (collision_names[i] == C.collision1().substr(0, 30))
                     feet_in_contact_[i] = true;
     }
+
+    // Set targets for foot tasks dependent on contact
+    static const array<string,4> foot_task_names = {
+        "BACK_LEFT_FOOT_POSITION",
+        "BACK_RIGHT_FOOT_POSITION",
+        "FRONT_LEFT_FOOT_POSITION",
+        "FRONT_RIGHT_FOOT_POSITION",
+    };
+    for (size_t i = 0; i < 4; i++){
+        WBC_.getTask(foot_task_names[i])->pos_target[2] = -.15; //std::min(-.02,-WBC_.getCalculatedHeight());
+        if (feet_in_contact_[i]){
+            // contacting
+            WBC_.getTask(foot_task_names[i])->active_targets = {true,true,false};
+            WBC_.getTask(foot_task_names[i])->Kp = foot_pos_Kp_;
+            WBC_.getTask(foot_task_names[i])->Kd = foot_pos_Kd_;
+            WBC_.getTask(foot_task_names[i])->task_weight = foot_pos_w_;
+        }
+        else{
+            // floating
+            // set foot position task to move to ground
+            WBC_.getTask(foot_task_names[i])->active_targets = {false,false,true};
+            WBC_.getTask(foot_task_names[i])->Kp = float_pos_Kp_;
+            WBC_.getTask(foot_task_names[i])->Kd = float_pos_Kd_;
+            WBC_.getTask(foot_task_names[i])->task_weight = float_pos_w_;
+        }
+    }
+    
 
     // //Debug: print contacts in order (BL, BR, FL, FR)
     // cout << "Feet contacts : {";

@@ -188,8 +188,8 @@ int main(int argc, char** argv){
         // ROS_INFO("Corrected quaternion: [%.2f, (%.2f, %.2f, %.2f)]", 
         // correct_quat.w(), correct_quat.x(), correct_quat.y(), correct_quat.z());
 
-        // Calculate the robot height using forward kinematics
-        robot_pos.z() = Pup.calcPupperHeight();
+        // Get the calculated robot height using forward kinematics
+        robot_pos.z() = Pup.getCalculatedHeight();
         std::cout << "height: " << robot_pos.z() << std::endl;
         
         // Update the robot state

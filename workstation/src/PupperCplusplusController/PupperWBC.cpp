@@ -105,7 +105,7 @@ void PupperWBC::updateController(const VectorNd& joint_angles,
 
     // Update robot height
     // Note: contacts, joint angles, and orientation must be updated before this
-    robot_height_ = calcPupperHeight();
+    robot_height_ = calcRobotHeight_();
 
     // Update the problem matrices
     massMat_.setZero(); // Required!
@@ -191,6 +191,10 @@ Task* PupperWBC::getTask(string name){
     return robot_tasks_[task_indices_[name]];
 }
 
+double PupperWBC::getCalculatedHeight(){
+    return robot_height_;
+}
+
 VectorNd PupperWBC::taskDerivative_(const Task *T){
     VectorNd deriv;
     const float dt = now() - t_prev_;
@@ -209,7 +213,7 @@ VectorNd PupperWBC::taskDerivative_(const Task *T){
 
         case JOINT_POS:
             deriv.resize(ROBOT_NUM_JOINTS);
-            deriv = T->joint_measured - T->last_joint_measured;
+            deriv = (T->joint_measured - T->last_joint_measured)/dt;
             break;
 
     }
@@ -218,6 +222,7 @@ VectorNd PupperWBC::taskDerivative_(const Task *T){
 }
 
 VectorNd PupperWBC::getRelativeBodyLocation(std::string body_name, VectorNd offset){
+    // Returns position in base coordinates (fixed to bottom pcb but same orientation as global)
     int id = Pupper_.GetBodyId(body_name.c_str());
     VectorNd pos = CalcBodyToBaseCoordinates(Pupper_, joint_angles_, id, offset, false);
     return pos;
@@ -511,13 +516,13 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     //       Set weights in main function
 
     // Parameters
-    double lambda_q = 0.0001; // Penalizes high joint accelerations
+    double lambda_q = 1.0; // 1.0 Penalizes high joint accelerations
     VectorNd rf_desired = VectorNd::Zero(12);// Desired reaction forces
     rf_desired << 1,-1,5.5, 1,1,5.5, -1,-1,5.5, -1,1,5.5; // Note: 6.5 back and 4.5 front was really close to standing
-    double lambda_rf_z = 0; // Normal reaction force penalty (minimize impacts)
-    double lambda_rf_xy = 0; // Tangential reaction force penalty (minimize slipping)
+    double lambda_rf_z = 1; // Normal reaction force penalty (minimize impacts)
+    double lambda_rf_xy = 1; // Tangential reaction force penalty (minimize slipping)
     double w_rf = 0; // Reaction force tracking penalty (follow desired reaction force)
-    double mu = .1; // Coefficient of friction 
+    double mu = .3; // Coefficient of friction 
 
     // ---------------------------------------------------------------
     // ------------------------- OBJECTIVE ---------------------------
@@ -565,6 +570,13 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
                 x_ddot_desired = T->Kp * (T->joint_measured - T->joint_target) + T->Kd * taskDerivative_(T);;
                 break;
 
+        }
+        if (T->type == BODY_POS){
+            if (T->body_id == "front_left_foot" ||  T->body_id == "front_right_foot" || T->body_id == "back_left_foot" || T->body_id == "back_right_foot"){
+                cout << T->body_id << " target: " << T->pos_target.transpose() << endl;
+                cout << T->body_id << " measrd: " << T->pos_measured.transpose() << endl;
+                cout << T->body_id << " active targets: [" << T->active_targets[0] << T->active_targets[1] << T->active_targets[2] << "]" << endl;
+            }
         }
         // cout << "xddot for " << T->body_id << " :" << x_ddot_desired.transpose().format(f) << endl;
 
@@ -888,7 +900,7 @@ void PupperWBC::convertEigenToCSC_(const MatrixNd &P, vector<c_float> &P_x, vect
     }
 }
 
-double PupperWBC::calcPupperHeight(){
+double PupperWBC::calcRobotHeight_(){
     // Calculates the height of the pupper using contacts, joint angles, and orientation 
     // Note: feet_in_contact_, joint_angles_ and orientation should be updated before this. 
     // The orientation is implicitly used in the CalcBodyToBaseCoordinates.
@@ -952,6 +964,10 @@ double PupperWBC::calcPupperHeight(){
     // cout << "height assuming base frame is not aligned with world (this should be wrong): " << s_height << endl;
     // cout << "height (this should be right): " << height << endl;
     // cout << "---------------------------- ----------------" << endl;
-
-    return height;
+    if (num_contacts > 0){
+        return height;
+    }
+    else{
+        return robot_height_;
+    }
 }

@@ -48,8 +48,8 @@ public:
     // Getter for the robot joint angles
     VectorNd getJointPositions();
 
-    // Calculate height from contacts
-    double calcPupperHeight();
+    // Get the calculated height (m from ground to origin of bottom pcb)
+    double getCalculatedHeight();
 
     // Load the Pupper model from a URDF
     void Load(std::string filename);
@@ -79,12 +79,16 @@ private:
     // Retrieve the contact Jacobian for the active contacts
     void updateContactJacobian_(bool update_kinematics = true);
 
+    // Calculate robot height using forward kinematics
+    double calcRobotHeight_();
+
     // Store the robot state
+    // Note: base is the coordinate frame fixed to the center of bottom PCB and oriented with global frame
     VectorNd joint_angles_;        // joint angles in radians
     VectorNd joint_velocities_;    // joint velocities in rad/s
-    VectorNd robot_position_;      // robot center of mass position in meters QUESTION: Is this actually the COM? 
-    double robot_height_;        // distance in m from floor to robot base (bottom PCB) in world coordinates
-    VectorNd robot_velocity_;      // robot center of mass velocity in m/s
+    VectorNd robot_position_;      // robot base position in meters  
+    double robot_height_;        // distance from floor to robot base in base coordinates in m
+    VectorNd robot_velocity_;      // robot base velocity in m/s
     Quat   robot_orientation_;   // robot orientation from IMU (Quaternion)
     Matrix Jc_;                  // contact Jacobian
     Matrix massMat_;             // mass matrix
@@ -106,7 +110,7 @@ private:
     std::vector<Task*> robot_tasks_;
     std::unordered_map<std::string, unsigned> task_indices_;
 
-    // Location of center of foot in lower link coordinates (center of hemisphere extended as a sphere)
+    // Location of center of foot in lower link coordinates (center of hemisphere face)
     const RigidBodyDynamics::Math::Vector3d body_contact_point_left_ =  RigidBodyDynamics::Math::Vector3d(0.0, -.11, 0.0095);
     const RigidBodyDynamics::Math::Vector3d body_contact_point_right_ = RigidBodyDynamics::Math::Vector3d(0.0, -.11, -0.0095);
 

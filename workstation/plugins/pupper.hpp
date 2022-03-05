@@ -51,7 +51,7 @@ private:
     physics::JointPtr back_left_joints_[3];      // Array of joints on the back left leg
     physics::JointPtr back_right_joints_[3];     // Array of joints on the back right leg
     physics::JointPtr all_joints_[12];
-    std::array<bool, 4> feet_in_contact_;
+    std::array<bool, 4> feet_in_contact_;        // Order: BL, BR, FL, FR
 
     // Gazebo connections
     event::ConnectionPtr updateConnection_;        // Event connection between the Gazebo simulation and this plugin
@@ -75,7 +75,15 @@ private:
     std::array<float, ROBOT_NUM_JOINTS> control_torques_;
     void updateController_();
     void applyTorques_();
+    float foot_pos_Kp_;                         // Contacting foot task parameter
+    float foot_pos_Kd_;                         // Contacting foot task parameter
+    float foot_pos_w_;                          // Contacting foot task parameter
 
+    float float_pos_Kp_;                         // floating foot task parameter
+    float float_pos_Kd_;                         // floating foot task parameter
+    float float_pos_w_;                          // floating foot task parameter
+
+    
     common::Time start_time;
 };
 
