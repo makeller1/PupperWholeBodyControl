@@ -104,3 +104,16 @@ The zero position is set with pupper laying on the ground.
 4. Rotate hips to lower the legs until the end of the motors touch the ground
 5. Rotate elbows to lower feet until they touch the ground (the motors should be rubbing against the ground at this point)
 If done correctly, *repeatability is < 1 deg*
+
+# Updating pupper URDF
+The Pupper URDF is generated with the xacro urdf macro. It is composed of four files:
+1. pupper.urdf.xacro
+2. right_leg.xacro
+3. left_leg.xacro
+4. motor.xacro
+Modifications to any of these files must be compiled as follows to take place:
+1. Open a terminal and navigate to ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/pupper_description
+2. Run
+	```
+	rosrun xacro xacro pupper.urdf.xacro > pupper.urdf
+	```
