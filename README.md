@@ -111,6 +111,7 @@ The Pupper URDF is generated with the xacro urdf macro. It is composed of four f
 2. right_leg.xacro
 3. left_leg.xacro
 4. motor.xacro
+
 Modifications to any of these files must be compiled as follows to take place:
 1. Open a terminal and navigate to ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/pupper_description
 2. Run
