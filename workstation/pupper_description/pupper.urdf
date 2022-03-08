@@ -326,6 +326,18 @@
       </geometry>
     </collision>
   </link>
+  <gazebo reference="front_left_foot">
+    <collision>
+      <surface>
+        <contact>
+          <ode>
+            <kp>1e15</kp>
+            <kd>1e13</kd>
+          </ode>
+        </contact>
+      </surface>
+    </collision>
+  </gazebo>
   <gazebo reference="front_left_lower_link">
     <collision>
       <surface>
@@ -588,6 +600,18 @@
       </geometry>
     </collision>
   </link>
+  <gazebo reference="back_left_foot">
+    <collision>
+      <surface>
+        <contact>
+          <ode>
+            <kp>1e15</kp>
+            <kd>1e13</kd>
+          </ode>
+        </contact>
+      </surface>
+    </collision>
+  </gazebo>
   <gazebo reference="back_left_lower_link">
     <collision>
       <surface>
@@ -850,6 +874,18 @@
       </geometry>
     </collision>
   </link>
+  <gazebo reference="front_right_foot">
+    <collision>
+      <surface>
+        <contact>
+          <ode>
+            <kp>1e15</kp>
+            <kd>1e13</kd>
+          </ode>
+        </contact>
+      </surface>
+    </collision>
+  </gazebo>
   <gazebo reference="front_right_lower_link">
     <collision>
       <surface>
@@ -1112,6 +1148,18 @@
       </geometry>
     </collision>
   </link>
+  <gazebo reference="back_right_foot">
+    <collision>
+      <surface>
+        <contact>
+          <ode>
+            <kp>1e15</kp>
+            <kd>1e13</kd>
+          </ode>
+        </contact>
+      </surface>
+    </collision>
+  </gazebo>
   <gazebo reference="back_right_lower_link">
     <collision>
       <surface>

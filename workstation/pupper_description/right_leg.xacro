@@ -131,6 +131,18 @@
         </link>
 
         <xacro:if value = "${full_urdf}">
+        <gazebo reference="${name}_right_foot">
+            <collision>
+                <surface>
+                    <contact>
+                        <ode>
+                            <kp>1e15</kp>
+                            <kd>1e13</kd>
+                        </ode>
+                    </contact>
+                </surface>
+            </collision>
+        </gazebo>
         <gazebo reference="${lowerName}">
             <collision>
                 <surface>
