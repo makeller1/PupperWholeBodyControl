@@ -12,7 +12,7 @@ enum TaskType{
     JOINT_POS
 };
 
-// Note: for embeddded use, we want to avoid dynamically sized vectors/matrices
+// Note: for embeddded use, we want to avoid dynamically sized vectors/matrices, but we're stuck for now since RBDL templates require dynamic matrices.
 struct Task{    
     // Which body this task is for (use JOINT for a joint position task)
     std::string body_id;
@@ -27,9 +27,10 @@ struct Task{
     // The desired task goal and which to consider for this task
     std::vector<bool> active_targets;
     
-    Eigen::VectorXd joint_target;
-    Eigen::VectorXd joint_measured;
-    Eigen::VectorXd last_joint_measured;
+    Eigen::Matrix<double, 12, 1> joint_target;
+    Eigen::Matrix<double, 12, 1> joint_measured;
+    Eigen::Matrix<double, 12, 1> djoint_target; // joint velocity
+    Eigen::Matrix<double, 12, 1> djoint_measured; // joint velocity
 
     Eigen::Quaternion<double> quat_target;
     Eigen::Quaternion<double> quat_measured;
@@ -38,13 +39,15 @@ struct Task{
     Eigen::Vector3d pos_target;
     Eigen::Vector3d pos_measured;
     Eigen::Vector3d last_pos_measured;
+    Eigen::Vector3d dpos_target;
+    Eigen::Vector3d dpos_measured; // body velocity
 
     // Coefficients for the PD error term 
     double Kp;
     double Kd;
 
     // Previous Jacobian
-    Eigen::MatrixXd j_prev; // Remove for embedded
+    Eigen::MatrixXd j_prev; 
     bool j_prev_updated = false;
 
 };
