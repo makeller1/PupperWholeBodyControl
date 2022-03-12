@@ -31,7 +31,8 @@ public:
                           const VectorNd& joint_velocities,
                           const Eigen::Vector3d& body_position,
                           const Eigen::Quaterniond& body_quaternion,
-                          const std::array<bool, 4>& feet_in_contact);
+                          const std::array<bool, 4>& feet_in_contact,
+                          const double time_s);
 
     // Add a task to the robot's task list
     void addTask(std::string name, Task* task);
@@ -93,7 +94,7 @@ private:
     double robot_height_;        // distance from floor to robot base in base coordinates in m
     VectorNd robot_velocity_;    // robot base velocity in m/s
     Quat   robot_orientation_;   // robot orientation from IMU (Quaternion)
-    Matrix Jc_;                  // contact Jacobian
+    Matrix Jc_;                  // contact Jacobian. Jc_.transpose() maps reaction forces to forces/torques on the joints (including floating joint).
     Matrix massMat_;             // mass matrix
     VectorNd b_g_;               // coriolis plus gravity
     std::array<bool, 4> feet_in_contact_;  // Feet in contact (boolean array: [back left, back right, front left, front right])
@@ -125,8 +126,10 @@ private:
     VectorNd solveQP(int n, int m, Matrix  &P, c_float *q, Matrix  &A, c_float *lb, c_float *ub);
 
     // Used for numerical derivative of task (x_dot)
+    double now(); // returns time in seconds 
     VectorNd taskDerivative_(const Task *T);
-    double t_prev_;
+    double time_now_; // s current time
+    double t_prev_; // s time at previous update
 };
 
 #endif

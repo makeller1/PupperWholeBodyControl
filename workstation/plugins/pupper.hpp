@@ -50,14 +50,16 @@ private:
     physics::JointPtr front_right_joints_[3];    // Array of joints on the front right leg
     physics::JointPtr back_left_joints_[3];      // Array of joints on the back left leg
     physics::JointPtr back_right_joints_[3];     // Array of joints on the back right leg
-    physics::JointPtr all_joints_[12];
+    physics::JointPtr all_joints_[12];           // Order: BL{hip,shoulder,elbow}, BR{hip,shoulder,elbow}, FL{hip,shoulder,elbow}, FR{hip,shoulder,elbow}
     std::array<bool, 4> feet_in_contact_;        // Order: BL, BR, FL, FR
 
     // Gazebo connections
     event::ConnectionPtr updateConnection_;        // Event connection between the Gazebo simulation and this plugin
     gazebo::transport::NodePtr connection_node_;   // Subscribes to gazebo update topics (used for contacts)
-    gazebo::transport::SubscriberPtr contact_sub_; // Used to subscribe to a specific topic
+    gazebo::transport::SubscriberPtr contact_sub_; // Used to subscribe to a specific topic (contacts)
     void contactCallback_(ConstContactsPtr &_msg);
+    gazebo::transport::SubscriberPtr stats_sub_;   // Used to subscribe to a specific topic (worldstats)
+    void statsCallback_(ConstWorldStatisticsPtr &_msg);
 
     // Robot State
     Eigen::VectorXd joint_positions_;
@@ -70,8 +72,11 @@ private:
 
     // Control
     PupperWBC WBC_;
-    common::Time last_update_time_;             // Used to keep track of update rate
-    common::Time update_interval_;              // Seconds between each control update loop
+    double simtime_;                            // ms current simulation time
+    double last_update_time_;                   // ms used to keep track of update rate
+    double update_interval_;                    // ms between each control update loop
+    // common::Time last_update_time_;             // Used to keep track of update rate
+    // common::Time update_interval_;              // Seconds between each control update loop
     std::array<float, ROBOT_NUM_JOINTS> control_torques_;
     void updateController_();
     void applyTorques_();
@@ -83,8 +88,7 @@ private:
     float float_pos_Kd_;                         // floating foot task parameter
     float float_pos_w_;                          // floating foot task parameter
 
-    
-    common::Time start_time;
+    double start_time;
 };
 
 

@@ -29,6 +29,7 @@ struct Task{
     
     Eigen::Matrix<double, 12, 1> joint_target;
     Eigen::Matrix<double, 12, 1> joint_measured;
+    Eigen::Matrix<double, 12, 1> last_joint_measured;
     Eigen::Matrix<double, 12, 1> djoint_target; // joint velocity
     Eigen::Matrix<double, 12, 1> djoint_measured; // joint velocity
 
@@ -41,6 +42,7 @@ struct Task{
     Eigen::Vector3d last_pos_measured;
     Eigen::Vector3d dpos_target;
     Eigen::Vector3d dpos_measured; // body velocity
+    Eigen::Vector3d x_ddot_ff; // feedforward acceleration - zero initialized
 
     // Coefficients for the PD error term 
     double Kp;

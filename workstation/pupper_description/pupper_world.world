@@ -7,7 +7,9 @@
         <include>
 			<uri>model://ground_plane</uri>
 		</include>
-
+        <gravity>
+            0 0 0
+        </gravity>
         <physics name="ode_100iters" type="ode" default="true">
             <type>ode</type>
             <!-- <max_step_size>0.001</max_step_size> -->

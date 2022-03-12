@@ -1,6 +1,7 @@
 #include <chrono>
 #include <memory>
 #include <iostream>
+#include <iomanip> // for setting cout precision
 #include "workstation/PupperWBC.hpp"
 #include "rbdl/addons/urdfreader/urdfreader.h"
 
@@ -29,12 +30,6 @@ namespace {
         return error3d;
     }
 
-    double now(){
-        // returns time in seconds since last epoch
-        auto now = std::chrono::system_clock::now().time_since_epoch().count();
-        return now/(double)1e9; // system_clock::now is in nanoseconds
-    }
-
     inline void printClean(Eigen::MatrixXd &M){
         for (int i = 0; i < M.rows(); i++){
             for (int j = 0; j < M.cols(); j++){
@@ -46,7 +41,6 @@ namespace {
     }
 
 }
-
 
 // Constructor
 PupperWBC::PupperWBC(){
@@ -73,7 +67,7 @@ PupperWBC::PupperWBC(){
     massMat_ = MatrixNd::Zero(NUM_JOINTS,NUM_JOINTS);
     b_g_     = VectorNd::Zero(NUM_JOINTS);
 
-    // Time for numerical derivative of jacobian
+    // Used for numerical derivatives
     t_prev_ = now();
 }
 
@@ -82,7 +76,8 @@ void PupperWBC::updateController(const VectorNd& joint_angles,
                                  const VectorNd& joint_velocities,
                                  const Eigen::Vector3d& body_position,
                                  const Eigen::Quaterniond& body_quaternion,
-                                 const array<bool, 4>& feet_in_contact){
+                                 const array<bool, 4>& feet_in_contact,
+                                 const double time_s){
     // Copy over the joint states
     for (int i = 0; i < ROBOT_NUM_JOINTS; i++){
         joint_angles_[i+6]     = joint_angles[i];
@@ -103,8 +98,11 @@ void PupperWBC::updateController(const VectorNd& joint_angles,
     // Copy which feet are in contact
     feet_in_contact_ = feet_in_contact;
 
+    // Record current time
+    t_prev_ = time_now_;
+    time_now_ = time_s;
+
     // Update robot height
-    // Note: contacts, joint angles, and orientation must be updated before this
     robot_height_ = calcRobotHeight_();
 
     // Update the problem matrices
@@ -132,6 +130,8 @@ void PupperWBC::addTask(string name, Task* T){
                 string message = "Task name " + T->body_id + " did not match any known body";
                 throw(std::runtime_error(message));
             }
+            T->pos_measured.fill(0);
+            T->dpos_measured.fill(0);
             T->active_targets.resize(3, false);
             break;
 
@@ -146,8 +146,11 @@ void PupperWBC::addTask(string name, Task* T){
 
         case JOINT_POS:
             assert(T->joint_target.size() == ROBOT_NUM_JOINTS);
-            T->joint_measured = VectorNd::Zero(T->joint_target.size());
+            T->joint_measured = VectorNd::Zero(12,1);
+            T->djoint_measured = VectorNd::Zero(12,1);
+            T->djoint_measured = VectorNd::Zero(12,1);
             T->last_joint_measured = T->joint_measured;
+            T->djoint_target = VectorNd::Zero(12,1);
             T->active_targets.resize(T->joint_target.size(), false);
             break;
     }
@@ -162,7 +165,8 @@ void PupperWBC::updateJointTask(std::string name, VectorNd state){
     Task* T = getTask(name);
     assert(T->type == JOINT_POS);
     T->last_joint_measured = T->joint_measured;
-    T->joint_measured = state;
+    T->joint_measured = joint_angles_.segment(6,12); // ORDER: t_x, t_y, t_z, quat_1, quat_2, quat_3, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, quat_4
+    T->djoint_measured = joint_velocities_.segment(6,12); // ORDER: v_x, v_y, v_z, w_x, w_y, w_z, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12
 }
 
 void PupperWBC::updateBodyPosTask(std::string name, Eigen::Vector3d state){
@@ -203,7 +207,7 @@ VectorNd PupperWBC::taskDerivative_(const Task *T){
 
         case BODY_POS:
             deriv.resize(3);
-            deriv = (T->pos_measured - T->last_pos_measured)/dt;
+            deriv = (T->pos_measured - T->last_pos_measured)/dt; //TODO: Replace with j*q_dot
             break;
 
         case BODY_ORI:
@@ -213,7 +217,10 @@ VectorNd PupperWBC::taskDerivative_(const Task *T){
 
         case JOINT_POS:
             deriv.resize(ROBOT_NUM_JOINTS);
-            deriv = (T->joint_measured - T->last_joint_measured)/dt;
+            deriv = T->djoint_measured;
+            cout << "-------------------" << endl;
+            cout << "Measured velocity: " << deriv.transpose() << endl;
+            cout << "Calcultd velocity: " << ((T->joint_measured - T->last_joint_measured)/dt).transpose() << endl;
             break;
 
     }
@@ -282,7 +289,7 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
 
     // Solve for the command torques
     VectorNd tau = (massMat_*q_ddot + b_g_ - Jc_.transpose()*F_r).tail(ROBOT_NUM_JOINTS);
-    // Store desired joint accelerations
+    // Store desired motor accelerations
     control_qddot_ = q_ddot.tail(ROBOT_NUM_JOINTS);
 
     // cout << "Back left hip control torque: " << tau(0) << endl;
@@ -325,8 +332,15 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
     // cout << optimal_solution.head(18).transpose().format(f) << endl;
     //cout << "Qdotdot RBDL: \n" << QDDOT.transpose().format(f) << endl;
     // cout << " --------------------------------------" << endl;
-    // cout << "Reaction Forces OSQP: -----------------" << endl;
-    // cout << optimal_solution.tail(12).transpose().format(f) << endl;
+    cout << "Commanded Torques: -----------------" << endl;
+    cout << tau.transpose() << endl;
+    cout << "Reaction Forces OSQP: -----------------" << endl;
+    cout << Fr.transpose().format(f) << endl;
+    cout << "b_g_: ---------" << endl;
+    cout << b_g_.transpose() << endl; 
+    cout << "M*q_ddot: ---------" << endl;
+    cout << (massMat_*q_ddot).transpose() << endl;
+
     //cout << "Reaction forces RBDL: \n " << pup_constraints_.force.transpose().format(f) << endl;
     //cout << " --------------------------------------" << endl;
 
@@ -480,7 +494,6 @@ VectorNd PupperWBC::getJointPositions(){
 }
 
 void PupperWBC::updateContactJacobian_(bool update_kinematics){
-    // Gives the velocity of the feet in the global frame.
     // update_kinematics defaults to true.
     // Note: Update_kinematics must be true if an RBDL function has not been called previously and the joint angles have changed.
 
@@ -494,7 +507,7 @@ void PupperWBC::updateContactJacobian_(bool update_kinematics){
         }
     }
     
-    //cout << "Jc_': \n" << Jc_.transpose().format(f) << endl;
+    cout << "Jc_': \n" << Jc_.transpose().format(f) << endl;
 }
 
 void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, VectorNd &u){
@@ -516,7 +529,7 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     //       Set weights in main function
 
     // Parameters
-    double lambda_q = 1.0; // 1.0 Penalizes high joint accelerations
+    double lambda_q = 0.001; // 1.0 Penalizes high joint accelerations
     VectorNd rf_desired = VectorNd::Zero(12);// Desired reaction forces
     rf_desired << 1,-1,5.5, 1,1,5.5, -1,-1,5.5, -1,1,5.5; // Note: 6.5 back and 4.5 front was really close to standing
     double lambda_rf_z = 1; // Normal reaction force penalty (minimize impacts)
@@ -563,11 +576,11 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
                 break;
 
             case BODY_POS:
-                x_ddot_desired = T->Kp * (T->pos_measured - T->pos_target) + T->Kd * taskDerivative_(T);
+                x_ddot_desired = T->Kp * (T->pos_measured - T->pos_target) + T->Kd * (taskDerivative_(T) - T->dpos_target) - T->x_ddot_ff;
                 break;
 
             case JOINT_POS:
-                x_ddot_desired = T->Kp * (T->joint_measured - T->joint_target) + T->Kd * taskDerivative_(T);;
+                x_ddot_desired = T->Kp * (T->joint_measured - T->joint_target) + T->Kd * (taskDerivative_(T) - T->djoint_target);
                 break;
 
         }
@@ -577,6 +590,16 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
                 cout << T->body_id << " measrd: " << T->pos_measured.transpose() << endl;
                 cout << T->body_id << " active targets: [" << T->active_targets[0] << T->active_targets[1] << T->active_targets[2] << "]" << endl;
             }
+        }
+        if (T->type == JOINT_POS){
+            std::cout << std::setprecision(3) << std::fixed;
+            cout << "***************************************" << endl;
+            cout << "Angle measrd: " << T->joint_measured.transpose() << endl;
+            cout << "Angle target: " << T->joint_target.transpose() << endl;
+            cout << "---------------------------------------" << endl;
+            cout << "Vlcty measrd: " << T->djoint_measured.transpose() << endl;
+            cout << "Vlcty target: " << T->djoint_target.transpose() << endl;
+            cout << "***************************************" << endl;
         }
         // cout << "xddot for " << T->body_id << " :" << x_ddot_desired.transpose().format(f) << endl;
 
@@ -595,8 +618,6 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
 
         //cout << "j_dot_q_dot_" << i << ": \n" << j_dot_q_dot << endl;
     }
-    // For j_dot calculation
-    t_prev_ = now();
 
     // Add a cost to penalize high joint accelerations
     for (int i = 6; i < NUM_JOINTS; i++){
@@ -670,7 +691,7 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     // -Fr_z*mu <= Fr_y <= Fr_z*mu   which is equivalent to    -inf <= Fr_y - Fr_z*mu < 0  AND  0 <= Fr_y + Fr_z*mu <= inf
     //
     // For normal reaction forces:
-    // 0 <= Fr_z <= rf_z_max     (l = u = 0 for feet commanded to swing)
+    // 0 <= Fr_z <= rf_z_max     (l = u = 0 for feet commanded to swing or floating)
 
     double rf_z_max = 100; // Max normal reaction force
     MatrixNd reaction_force_mat = MatrixNd::Zero(20, NUM_JOINTS + 12); // Block matrix to store inequality matrix 20x30
@@ -898,6 +919,11 @@ void PupperWBC::convertEigenToCSC_(const MatrixNd &P, vector<c_float> &P_x, vect
 
         P_p.push_back(P_x.size());
     }
+}
+
+double PupperWBC::now(){
+    // returns time in seconds 
+    return time_now_;
 }
 
 double PupperWBC::calcRobotHeight_(){

@@ -35,28 +35,41 @@ PupperPlugin::PupperPlugin(){
     static Task CoM_Position_Task;
     CoM_Position_Task.type    = BODY_POS;
     CoM_Position_Task.body_id = "bottom_PCB";
-    CoM_Position_Task.task_weight = 10; // 1
-    CoM_Position_Task.active_targets = {false, false, true};    // only account for z-position
+    CoM_Position_Task.task_weight = 0; // 10
+    // CoM_Position_Task.active_targets = {false, false, true};    // only account for z-position
+    CoM_Position_Task.active_targets = {false, false, true};   
     CoM_Position_Task.pos_target << 0, 0, 0.09; // .10
-    CoM_Position_Task.Kp = 400;//200;
-    CoM_Position_Task.Kd = 200;
+    CoM_Position_Task.Kp = 0;//400;
+    CoM_Position_Task.Kd = 0;//200
+    CoM_Position_Task.x_ddot_ff << 0, 0, 9.81; // feed forward acceleration - counter gravity
 
     // Task for Body center of mass to be flat // .001
     static Task CoM_Orientation_Task;
     CoM_Orientation_Task.type    = BODY_ORI;
     CoM_Orientation_Task.body_id = "bottom_PCB";
-    CoM_Orientation_Task.task_weight = 100; // 10;
+    CoM_Orientation_Task.task_weight = 0; // 100;
     CoM_Orientation_Task.quat_target = Eigen::Quaternion<double>::Identity();
     CoM_Orientation_Task.Kp = 1000;//1000;
     CoM_Orientation_Task.Kd = 200;
 
+    // static Task JointPositionTask; // .01
+    // JointPositionTask.type = JOINT_POS;
+    // JointPositionTask.task_weight = 1; //0.1;
+    // JointPositionTask.joint_target = VectorNd::Zero(12);
+    // JointPositionTask.active_targets = {true, false, false, true, false, false, true, false, false, true, false, false};
+    // JointPositionTask.Kp = 200;
+    // JointPositionTask.Kd = 200;
+
     static Task JointPositionTask; // .01
     JointPositionTask.type = JOINT_POS;
-    JointPositionTask.task_weight = 1; //0.1;
-    JointPositionTask.joint_target = VectorNd::Zero(12);
-    JointPositionTask.active_targets = {true, false, false, true, false, false, true, false, false, true, false, false};
-    JointPositionTask.Kp = 200;
-    JointPositionTask.Kd = 200;
+    JointPositionTask.task_weight = 100; 
+    JointPositionTask.joint_target <<   0.0,  M_PI_4,  M_PI_2, 
+                                        0.0, -M_PI_4, -M_PI_2,
+                                        0.0,  M_PI_4,  M_PI_2,
+                                        0.0, -M_PI_4, -M_PI_2;
+    JointPositionTask.active_targets = {true, true, true, true, true, true, true, true, true, true, true, true};
+    JointPositionTask.Kp = 5000;
+    JointPositionTask.Kd = 500; //2000
 
     foot_pos_Kp_ = 10;
     foot_pos_Kd_ = 5;
@@ -70,7 +83,8 @@ PupperPlugin::PupperPlugin(){
     FLFootTask.type = BODY_POS;
     FLFootTask.body_id = "front_left_foot";
     FLFootTask.task_weight = foot_pos_w_;
-    FLFootTask.active_targets = {true, true, false};  // We'll let the COM task take care of heigh
+    // FLFootTask.active_targets = {true, true, false};  // We'll let the COM task take care of heigh
+    FLFootTask.active_targets = {false, false, false};  // We'll let the COM task take care of heigh
     FLFootTask.pos_target << 0.08, 0.075, -0.1;
     FLFootTask.Kp = foot_pos_Kp_;
     FLFootTask.Kd = foot_pos_Kd_;
@@ -80,7 +94,7 @@ PupperPlugin::PupperPlugin(){
     FRFootTask.type = BODY_POS;
     FRFootTask.body_id = "front_right_foot";
     FRFootTask.task_weight = foot_pos_w_;
-    FRFootTask.active_targets = {true, true, false};  // We'll let the COM task take care of heigh
+    FRFootTask.active_targets = {false, false, false};  // We'll let the COM task take care of heigh
     FRFootTask.pos_target << 0.08, -0.065, -0.1;
     FRFootTask.Kp = foot_pos_Kp_;
     FRFootTask.Kd = foot_pos_Kd_;
@@ -90,7 +104,8 @@ PupperPlugin::PupperPlugin(){
     BLFootTask.type = BODY_POS;
     BLFootTask.body_id = "back_left_foot";
     BLFootTask.task_weight = foot_pos_w_;
-    BLFootTask.active_targets = {true, true, false};  // We'll let the COM task take care of heigh
+    // BLFootTask.active_targets = {true, true, false};  // We'll let the COM task take care of heigh
+    BLFootTask.active_targets = {false, false, false};  // We'll let the COM task take care of heigh
     BLFootTask.pos_target << -0.11, 0.075, -0.1;
     BLFootTask.Kp = foot_pos_Kp_;
     BLFootTask.Kd = foot_pos_Kd_;
@@ -100,7 +115,8 @@ PupperPlugin::PupperPlugin(){
     BRFootTask.type = BODY_POS;
     BRFootTask.body_id = "back_right_foot";
     BRFootTask.task_weight = foot_pos_w_;
-    BRFootTask.active_targets = {true, true, false};  // We'll let the COM task take care of heigh
+    // BRFootTask.active_targets = {true, true, false};  // We'll let the COM task take care of heigh
+    BRFootTask.active_targets = {false, false, false};  // We'll let the COM task take care of heigh
     BRFootTask.pos_target << -0.11, -0.065, -0.1;
     BRFootTask.Kp = foot_pos_Kp_;
     BRFootTask.Kd = foot_pos_Kd_;
@@ -168,15 +184,18 @@ void PupperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
     this->updateConnection_ = event::Events::ConnectWorldUpdateBegin(std::bind(&PupperPlugin::onUpdate, this));
 
     // Set up update rate variables
-    update_interval_  = common::Time(0, common::Time::SecToNano(0.002));  // In the form common::Time(sec, nanoSec): 500Hz
-    last_update_time_ = common::Time::GetWallTime();
+    update_interval_  = 0.002;  // 500Hz
+    last_update_time_ = 0.0;
 
     // Set up the connection to Gazebo topics
     connection_node_ = gazebo::transport::NodePtr(new gazebo::transport::Node());
     connection_node_->Init("pupper_world");
     contact_sub_ = connection_node_->Subscribe("~/physics/contacts", &PupperPlugin::contactCallback_, this);
 
-    start_time = common::Time::GetWallTime();
+    // TODO: Create subscriber to simulation time, -> store in pupper as private class variable, pass to WBC on update.
+    stats_sub_ = connection_node_->Subscribe("~/world_stats", &PupperPlugin::statsCallback_, this);
+
+    start_time = simtime_;
 
     cout << "Loaded successfully" << endl;
 }
@@ -190,30 +209,29 @@ void PupperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 
 // Called on every simulation time step
 void PupperPlugin::onUpdate(){
-    static vector<float> init_angles = { 0.0,  M_PI_4,  M_PI_2, 
-                                         0.0, -M_PI_4, -M_PI_2,
-                                         0.0,  M_PI_4,  M_PI_2,
-                                         0.0, -M_PI_4, -M_PI_2};
+    static vector<float> init_angles = { 0.0,  0.0,  0.0, 
+                                         0.0,  0.0,  0.0, 
+                                         0.0,  0.0,  0.0,  
+                                         0.0,  0.0,  0.0};
 
-    common::Time now = common::Time::GetWallTime();
-    double dTime = now.Double();
+    double now = simtime_;
 
     // // Oscillate COM height task
-    // float target_height = 0.12 + 0.02*sin(0.5*dTime); // 0.5 Hz (2 sec)
+    // float target_height = 0.12 + 0.02*sin(0.5*now); // 0.5 Hz (2 sec)
     // WBC_.getTask("COM_POSITION")->pos_target.z() = target_height; 
 
     // // Oscillate left/right tilt
-    // float target_roll = M_PI/12 * sin(0.5 * dTime); // 0.5 HZ (2 sec)
+    // float target_roll = M_PI/12 * sin(0.5 * now); // 0.5 HZ (2 sec)
     // WBC_.getTask("COM_ORIENTATION")->quat_target = Eigen::AngleAxisd(target_roll, Eigen::Vector3d::UnitX());
 
     // First 2 seconds
-    if (now - start_time < common::Time(2, 0)){
+    if (now - start_time < 4e3){
         setJointPositions(init_angles);
     }
-    // Fall (hopefully) gracefully
-    else if (now - start_time < common::Time(5, 0)){
-        std::fill(control_torques_.begin(), control_torques_.end(), 0);
-    }
+    // // Fall (hopefully) gracefully
+    // else if (now - start_time < 4e5){
+    //     std::fill(control_torques_.begin(), control_torques_.end(), 0);
+    // }
     //Manage publisher update rate
     else if (now - last_update_time_ > update_interval_){
         // Get the robot state from the simulation
@@ -223,7 +241,7 @@ void PupperPlugin::onUpdate(){
         updateController_();
         // Calculate control commands
         control_torques_ = WBC_.calculateOutputTorque();
-        last_update_time_ = common::Time::GetWallTime();
+        last_update_time_ = simtime_;
     }
 
     // This needs to be outside the loop or else the joints will go dead on non-update iterations
@@ -299,13 +317,14 @@ void PupperPlugin::applyTorques_(){
 // =========================================================================================
 
 
-// Get torque measurements from the joints
+// Get joint measurements from gazebo
 void PupperPlugin::updateJoints_(){
     for (uint8_t i = 0; i < 12; i++){
         joint_positions_[i] = (float) all_joints_[i]->Position();
         joint_velocities_[i] = (float) all_joints_[i]->GetVelocity(0);
         // physics::JointWrench joint_wrench = all_joints_[i]->GetForceTorque(0);
         // joint_torques[i] = (float)joint_wrench.body1Torque.Z();
+        cout<<"joint vel "<< (int) i << ": " << all_joints_[i]->GetVelocity(0) << endl;
     }
 }
 
@@ -333,8 +352,8 @@ void PupperPlugin::updateBody_(){
 
 // Tell the controller the current state of the robot
 void PupperPlugin::updateController_(){
-    WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, feet_in_contact_);
-    // WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, {true,true,true,true});
+    // WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, feet_in_contact_, simtime_/1e3);
+    WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, {true,true,true,true},simtime_/1e3);
     WBC_.updateBodyPosTask("COM_POSITION", body_COM_);
     WBC_.updateBodyOriTask("COM_ORIENTATION", body_quat_);
     VectorNd jointPos(12);
@@ -371,31 +390,31 @@ void PupperPlugin::contactCallback_(ConstContactsPtr &_msg){
                     feet_in_contact_[i] = true;
     }
 
-    // Set targets for foot tasks dependent on contact
-    static const array<string,4> foot_task_names = {
-        "BACK_LEFT_FOOT_POSITION",
-        "BACK_RIGHT_FOOT_POSITION",
-        "FRONT_LEFT_FOOT_POSITION",
-        "FRONT_RIGHT_FOOT_POSITION",
-    };
-    for (size_t i = 0; i < 4; i++){
-        WBC_.getTask(foot_task_names[i])->pos_target[2] = -.15; //std::min(-.02,-WBC_.getCalculatedHeight());
-        if (feet_in_contact_[i]){
-            // contacting
-            WBC_.getTask(foot_task_names[i])->active_targets = {true,true,false};
-            WBC_.getTask(foot_task_names[i])->Kp = foot_pos_Kp_;
-            WBC_.getTask(foot_task_names[i])->Kd = foot_pos_Kd_;
-            WBC_.getTask(foot_task_names[i])->task_weight = foot_pos_w_;
-        }
-        else{
-            // floating
-            // set foot position task to move to ground
-            WBC_.getTask(foot_task_names[i])->active_targets = {false,false,true};
-            WBC_.getTask(foot_task_names[i])->Kp = float_pos_Kp_;
-            WBC_.getTask(foot_task_names[i])->Kd = float_pos_Kd_;
-            WBC_.getTask(foot_task_names[i])->task_weight = float_pos_w_;
-        }
-    }
+    // // Set targets for foot tasks dependent on contact
+    // static const array<string,4> foot_task_names = {
+    //     "BACK_LEFT_FOOT_POSITION",
+    //     "BACK_RIGHT_FOOT_POSITION",
+    //     "FRONT_LEFT_FOOT_POSITION",
+    //     "FRONT_RIGHT_FOOT_POSITION",
+    // };
+    // for (size_t i = 0; i < 4; i++){
+    //     WBC_.getTask(foot_task_names[i])->pos_target[2] = -.15; //std::min(-.02,-WBC_.getCalculatedHeight());
+    //     if (feet_in_contact_[i]){
+    //         // contacting
+    //         WBC_.getTask(foot_task_names[i])->active_targets = {true,true,false};
+    //         WBC_.getTask(foot_task_names[i])->Kp = foot_pos_Kp_;
+    //         WBC_.getTask(foot_task_names[i])->Kd = foot_pos_Kd_;
+    //         WBC_.getTask(foot_task_names[i])->task_weight = foot_pos_w_;
+    //     }
+    //     else{
+    //         // floating
+    //         // set foot position task to move to ground
+    //         WBC_.getTask(foot_task_names[i])->active_targets = {false,false,true};
+    //         WBC_.getTask(foot_task_names[i])->Kp = float_pos_Kp_;
+    //         WBC_.getTask(foot_task_names[i])->Kd = float_pos_Kd_;
+    //         WBC_.getTask(foot_task_names[i])->task_weight = float_pos_w_;
+    //     }
+    // }
     
 
     // //Debug: print contacts in order (BL, BR, FL, FR)
@@ -405,6 +424,13 @@ void PupperPlugin::contactCallback_(ConstContactsPtr &_msg){
     // }
     // cout << "}" << endl;
 
+}
+
+void PupperPlugin::statsCallback_(ConstWorldStatisticsPtr &_msg){
+    auto timeMsg = _msg->sim_time(); // get sim time
+    common::Time time_ns = timeMsg.nsec(); // get nanoseconds 
+    common::Time time_s = timeMsg.sec(); // get seconds 
+    simtime_ = time_ns.Double()/1e6 + time_s.Double()*1e3; // ms
 }
 
 // Tell Gazebo about this plugin, so that Gazebo can call Load on this plugin.

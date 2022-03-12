@@ -165,6 +165,10 @@ int main(int argc, char** argv){
     // Foot contacts
     std::array<bool, 4> contacts = {true, true, true, true};
 
+    // TODO: Get actual current time!
+    // Current time
+    double time_now = 0.0;
+
     // Create the ROS message that we will be sending back to the Python node
     // top 12 are torque commands, bottom 12 are desired joint accelerations
     std_msgs::Float64MultiArray command_msg;
@@ -193,7 +197,7 @@ int main(int argc, char** argv){
         std::cout << "height: " << robot_pos.z() << std::endl;
         
         // Update the robot state
-        Pup.updateController(joint_positions_, joint_velocities_, body_pos_, correct_quat, contacts);
+        Pup.updateController(joint_positions_, joint_velocities_, body_pos_, correct_quat, contacts, time_now);
 
         // Update the tasks states
         Pup.updateBodyPosTask("COM_POSITION", robot_pos);
