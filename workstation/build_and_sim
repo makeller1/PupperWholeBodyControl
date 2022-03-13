@@ -2,7 +2,7 @@
 #Build code and run Gazebo simulation
 #Note: roscore must be running.
 cd ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/plugins/build
-catkin build # build library containing PupperWBC.cpp and PupperModel.cpp
+catkin build # builds a catkin package containing all cpp except gazebo plugins 
 cmake ..
 make -j
 

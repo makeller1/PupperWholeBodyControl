@@ -221,6 +221,7 @@ VectorNd PupperWBC::taskDerivative_(const Task *T){
             cout << "-------------------" << endl;
             cout << "Measured velocity: " << deriv.transpose() << endl;
             cout << "Calcultd velocity: " << ((T->joint_measured - T->last_joint_measured)/dt).transpose() << endl;
+            cout << "dt: " << dt << endl;
             break;
 
     }

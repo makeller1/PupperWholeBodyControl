@@ -167,7 +167,7 @@ int main(int argc, char** argv){
 
     // TODO: Get actual current time!
     // Current time
-    double time_now = 0.0;
+    double time_now = ros::Time::now().toSec();
 
     // Create the ROS message that we will be sending back to the Python node
     // top 12 are torque commands, bottom 12 are desired joint accelerations

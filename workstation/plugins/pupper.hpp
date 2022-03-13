@@ -34,7 +34,7 @@ public:
     virtual void Load(physics::ModelPtr _model, sdf::ElementPtr _sdf);
 
     // Called on every timestep of the simulation (control code goes here)
-    void onUpdate();
+    void onUpdate(const common::UpdateInfo &_info);
 
     // Apply command to the joints as we would actually do on the robot
     void controlJoints(enum PupperLegs leg, std::vector<float> torques);
@@ -58,8 +58,6 @@ private:
     gazebo::transport::NodePtr connection_node_;   // Subscribes to gazebo update topics (used for contacts)
     gazebo::transport::SubscriberPtr contact_sub_; // Used to subscribe to a specific topic (contacts)
     void contactCallback_(ConstContactsPtr &_msg);
-    gazebo::transport::SubscriberPtr stats_sub_;   // Used to subscribe to a specific topic (worldstats)
-    void statsCallback_(ConstWorldStatisticsPtr &_msg);
 
     // Robot State
     Eigen::VectorXd joint_positions_;
@@ -88,7 +86,7 @@ private:
     float float_pos_Kd_;                         // floating foot task parameter
     float float_pos_w_;                          // floating foot task parameter
 
-    double start_time;
+    double start_time;                           // start time of simulation ms
 };
 
 

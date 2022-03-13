@@ -68,15 +68,15 @@ PupperPlugin::PupperPlugin(){
                                         0.0,  M_PI_4,  M_PI_2,
                                         0.0, -M_PI_4, -M_PI_2;
     JointPositionTask.active_targets = {true, true, true, true, true, true, true, true, true, true, true, true};
-    JointPositionTask.Kp = 5000;
-    JointPositionTask.Kd = 500; //2000
+    JointPositionTask.Kp = 5000; //5000
+    JointPositionTask.Kd = 0; //2000
 
     foot_pos_Kp_ = 10;
     foot_pos_Kd_ = 5;
-    foot_pos_w_  = 3;
+    foot_pos_w_  = 0; // 3
     float_pos_Kp_ = 50; //50
     float_pos_Kd_ = 0; // 0
-    float_pos_w_  = 50;
+    float_pos_w_  = 0; // 50
 
     // Keep the front left foot in place
     static Task FLFootTask;
@@ -181,8 +181,8 @@ void PupperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
     body_COM_         = Eigen::VectorXd::Zero(3);
 
     //Connect plugin to Gazebo world instance
-    this->updateConnection_ = event::Events::ConnectWorldUpdateBegin(std::bind(&PupperPlugin::onUpdate, this));
-
+    this->updateConnection_ = event::Events::ConnectWorldUpdateBegin(std::bind(&PupperPlugin::onUpdate, this, std::placeholders::_1));
+    
     // Set up update rate variables
     update_interval_  = 0.002;  // 500Hz
     last_update_time_ = 0.0;
@@ -192,10 +192,7 @@ void PupperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
     connection_node_->Init("pupper_world");
     contact_sub_ = connection_node_->Subscribe("~/physics/contacts", &PupperPlugin::contactCallback_, this);
 
-    // TODO: Create subscriber to simulation time, -> store in pupper as private class variable, pass to WBC on update.
-    stats_sub_ = connection_node_->Subscribe("~/world_stats", &PupperPlugin::statsCallback_, this);
-
-    start_time = simtime_;
+    start_time = 0.0;
 
     cout << "Loaded successfully" << endl;
 }
@@ -208,32 +205,32 @@ void PupperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 // =========================================================================================
 
 // Called on every simulation time step
-void PupperPlugin::onUpdate(){
+void PupperPlugin::onUpdate(const common::UpdateInfo &_info){
     static vector<float> init_angles = { 0.0,  0.0,  0.0, 
                                          0.0,  0.0,  0.0, 
                                          0.0,  0.0,  0.0,  
                                          0.0,  0.0,  0.0};
 
-    double now = simtime_;
+    simtime_ = _info.simTime.Double()*1e3;
 
     // // Oscillate COM height task
-    // float target_height = 0.12 + 0.02*sin(0.5*now); // 0.5 Hz (2 sec)
+    // float target_height = 0.12 + 0.02*sin(0.5*simtime_); // 0.5 Hz (2 sec)
     // WBC_.getTask("COM_POSITION")->pos_target.z() = target_height; 
 
     // // Oscillate left/right tilt
-    // float target_roll = M_PI/12 * sin(0.5 * now); // 0.5 HZ (2 sec)
+    // float target_roll = M_PI/12 * sin(0.5 * simtime_); // 0.5 HZ (2 sec)
     // WBC_.getTask("COM_ORIENTATION")->quat_target = Eigen::AngleAxisd(target_roll, Eigen::Vector3d::UnitX());
 
     // First 2 seconds
-    if (now - start_time < 4e3){
+    if (simtime_ - start_time < 4e3){
         setJointPositions(init_angles);
     }
     // // Fall (hopefully) gracefully
-    // else if (now - start_time < 4e5){
+    // else if (simtime_ - start_time < 4e5){
     //     std::fill(control_torques_.begin(), control_torques_.end(), 0);
     // }
     //Manage publisher update rate
-    else if (now - last_update_time_ > update_interval_){
+    else if (simtime_ - last_update_time_ > update_interval_){
         // Get the robot state from the simulation
         updateBody_();
         updateJoints_();
@@ -424,13 +421,6 @@ void PupperPlugin::contactCallback_(ConstContactsPtr &_msg){
     // }
     // cout << "}" << endl;
 
-}
-
-void PupperPlugin::statsCallback_(ConstWorldStatisticsPtr &_msg){
-    auto timeMsg = _msg->sim_time(); // get sim time
-    common::Time time_ns = timeMsg.nsec(); // get nanoseconds 
-    common::Time time_s = timeMsg.sec(); // get seconds 
-    simtime_ = time_ns.Double()/1e6 + time_s.Double()*1e3; // ms
 }
 
 // Tell Gazebo about this plugin, so that Gazebo can call Load on this plugin.
