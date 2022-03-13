@@ -53,11 +53,7 @@ sudo apt install ros-noetic-gazebo-ros
 	# Point gazebo to plugin path
 	export GAZEBO_PLUGIN_PATH=~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/plugins/build
 	```
-5. Open a terminal and run
-	```
-	roscore
-	```
-6. Open a terminal and run
+3. Open a terminal and run
 	```
 	roslaunch workstation load_pupper.launch
 	```
