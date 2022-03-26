@@ -337,8 +337,12 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
     cout << tau.transpose() << endl;
     cout << "Reaction Forces OSQP: -----------------" << endl;
     cout << Fr.transpose().format(f) << endl;
+    cout << "Jc'*Fr: ---------" << endl;
+    cout << (Jc_.transpose()*F_r).transpose() << endl;
     cout << "b_g_: ---------" << endl;
     cout << b_g_.transpose() << endl; 
+    cout << "q_ddot: -----------" << endl;
+    cout << q_ddot.transpose() << endl;
     cout << "M*q_ddot: ---------" << endl;
     cout << (massMat_*q_ddot).transpose() << endl;
 
@@ -378,7 +382,7 @@ array<float, 12> PupperWBC::getDesiredAccel(){
 
 void PupperWBC::initConstraintSets_(){
     // Perform initialization of RBDL contact constraints
-    // Contacts are defined in the global frame
+    // Contact normals are defined in the global frame
     // Order is as follows (Rows of the contact Jacobian):
     // Back left foot
     //      X,Y,Z constraints (3 rows)
@@ -502,9 +506,9 @@ void PupperWBC::updateContactJacobian_(bool update_kinematics){
     for (int i=0; i<4; i++){
         if (!feet_in_contact_[i]){
             cout << "Foot " << i << " is floating." << endl;
-            Jc_.row(i*3).setZero();
-            Jc_.row(i*3 + 1).setZero();
-            Jc_.row(i*3 + 2).setZero();
+            Jc_.col(i*3).setZero();
+            Jc_.col(i*3 + 1).setZero();
+            Jc_.col(i*3 + 2).setZero();
         }
     }
     
