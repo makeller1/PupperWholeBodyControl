@@ -501,14 +501,15 @@ VectorNd PupperWBC::getJointPositions(){
 void PupperWBC::updateContactJacobian_(bool update_kinematics){
     // update_kinematics defaults to true.
     // Note: Update_kinematics must be true if an RBDL function has not been called previously and the joint angles have changed.
-
+    // Method below simply calculates the jacobian of the feet
     CalcConstraintsJacobian(Pupper_, joint_angles_, pup_constraints_, Jc_, update_kinematics);
+    // Zero-out the floating feet; They do not impart any forces.
     for (int i=0; i<4; i++){
         if (!feet_in_contact_[i]){
             cout << "Foot " << i << " is floating." << endl;
-            Jc_.col(i*3).setZero();
-            Jc_.col(i*3 + 1).setZero();
-            Jc_.col(i*3 + 2).setZero();
+            Jc_.row(i*3).setZero();
+            Jc_.row(i*3 + 1).setZero();
+            Jc_.row(i*3 + 2).setZero();
         }
     }
     
