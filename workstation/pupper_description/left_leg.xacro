@@ -84,7 +84,7 @@
             <origin xyz  = "0.007 0.085 0" rpy = "${PI} 0 0"/>
         </joint>
 
-        <!-- Creat the lower link -->
+        <!-- Create the lower link -->
         <xacro:property name = "lowerName" value = "${name}_left_lower_link"/>
         <link name = "${lowerName}">
             <inertial>
