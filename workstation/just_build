@@ -1,0 +1,7 @@
+#!/bin/bash
+#This is a bash script to build the code
+#Note: roscore must be running.
+cd ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/plugins/build
+catkin build # builds a catkin package containing all cpp except gazebo plugins 
+cmake ..
+make -j
