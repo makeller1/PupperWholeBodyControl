@@ -59,7 +59,10 @@ public:
     // Get the torque command fulfilling the current tasks
     std::array<float, 12> calculateOutputTorque();
     // Get the desired joint (motor) accelerations fulfilling the current tasks
-    std::array<float, 12> getDesiredAccel();
+    std::array<float, 12> getOptimalAccel();
+
+    // For tuning and debugging
+    void printDiag();
 
 private:
     // The Pupper model for RBDL
@@ -74,8 +77,14 @@ private:
     Matrix getTaskJacobian_(std::string task_name);
     Matrix getTaskJacobian_(unsigned priority);
 
+    // Retrieve the active target selection matrix for specific task
+    Matrix getTaskU_(unsigned priority);
+
     // Initialize RBDL constraints 
     void initConstraintSets_();
+
+    // Retrieve the contact Jacobian for the active contacts
+    void calcContactJacobian_();
 
     // Retrieve the contact Jacobian for the active contacts
     void updateContactJacobian_(bool update_kinematics = true);
@@ -87,7 +96,7 @@ private:
     // Note: base is the coordinate frame fixed to the center of bottom PCB and oriented with global frame
     VectorNd joint_angles_;     // joint angles in rad. Describes 12 motors plus floating base of 3 xyz and 4 quaternion, ...
                                 // ORDER: t_x, t_y, t_z, quat_1, quat_2, quat_3, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, quat_4
-                                //        where t is translation of the base, w is quaternion orientation of the base
+                                //        where t is translation of the base, quat is quaternion orientation of the base
     VectorNd joint_velocities_; // joint velocities in rad/s. Describes 12 motors plus floating base of xyz_dot and 3 angular velocities 
                                 // ORDER: v_x, v_y, v_z, w_x, w_y, w_z, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12
     VectorNd robot_position_;    // robot base position in meters  
@@ -101,7 +110,7 @@ private:
 
     // Control torques in Nm
     VectorNd control_torques_;
-    // Desired joint (motor) accelerations in m/s^2
+    // Optimal joint (motor) accelerations in rad/s^2 (solution of QP)
     VectorNd control_qddot_;
 
     // Body ids of lower links 
@@ -126,10 +135,14 @@ private:
     VectorNd solveQP(int n, int m, Matrix  &P, c_float *q, Matrix  &A, c_float *lb, c_float *ub);
 
     // Used for numerical derivative of task (x_dot)
-    double now(); // returns time in seconds 
+    // returns time in seconds 
+    double now();
     VectorNd taskDerivative_(const Task *T);
     double time_now_; // s current time
     double t_prev_; // s time at previous update
+
+    // For tuning and debugging
+    VectorNd optimal_qddot_; // Optimal generalized accelerations
 };
 
 #endif
