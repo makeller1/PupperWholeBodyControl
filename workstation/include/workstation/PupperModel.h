@@ -5,5 +5,5 @@
 #include "rbdl/rbdl.h"
 
 std::shared_ptr<RigidBodyDynamics::Model> createPupperModel();
-
+void printCOM(RigidBodyDynamics::Model& model);
 #endif
