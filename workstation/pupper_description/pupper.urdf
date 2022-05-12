@@ -389,7 +389,7 @@
     <child link="front_left_hub"/>
     <origin rpy="-1.570796326795 0 0" xyz="0.054 0.045 0.041"/>
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.2" friction="0.3"/>
+    <dynamics damping="0.05" friction="0.01"/>
     <axis xyz="-1 0 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -440,7 +440,7 @@
     <child link="front_left_upper_link"/>
     <origin rpy="0 -1.570796326795 0" xyz="0 0 0.022"/>
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.2" friction="0.3"/>
+    <dynamics damping="0.05" friction="0.01"/>
     <axis xyz="1 0 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -491,7 +491,7 @@
     <child link="front_left_lower_link"/>
     <origin rpy="0 -1.570796326795 3.14159265359" xyz="-0.006 0.08 0"/>
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.2" friction="0.3"/>
+    <dynamics damping="0.05" friction="0.01"/>
     <axis xyz="0 0 -1"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -663,7 +663,7 @@
     <child link="back_left_hub"/>
     <origin rpy="-1.570796326795 0 0" xyz="-0.147 0.045 0.041"/>
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.2" friction="0.3"/>
+    <dynamics damping="0.05" friction="0.01"/>
     <axis xyz="-1 0 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -714,7 +714,7 @@
     <child link="back_left_upper_link"/>
     <origin rpy="0 -1.570796326795 0" xyz="0 0 0.022"/>
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.2" friction="0.3"/>
+    <dynamics damping="0.05" friction="0.01"/>
     <axis xyz="1 0 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -765,7 +765,7 @@
     <child link="back_left_lower_link"/>
     <origin rpy="0 -1.570796326795 3.14159265359" xyz="-0.006 0.08 0"/>
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.2" friction="0.3"/>
+    <dynamics damping="0.05" friction="0.01"/>
     <axis xyz="0 0 -1"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -937,7 +937,7 @@
     <child link="front_right_hub"/>
     <origin rpy="-1.570796326795 0 0" xyz="0.054 -0.045 0.041"/>
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.2" friction="0.3"/>
+    <dynamics damping="0.05" friction="0.01"/>
     <axis xyz="-1 0 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -988,7 +988,7 @@
     <child link="front_right_upper_link"/>
     <origin rpy="0 1.570796326795 0" xyz="0 0 -0.02"/>
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.2" friction="0.3"/>
+    <dynamics damping="0.05" friction="0.01"/>
     <axis xyz="1 0 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -1039,7 +1039,7 @@
     <child link="front_right_lower_link"/>
     <origin rpy="0 1.570796326795 3.14159265359" xyz="-0.006 0.08 0"/>
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.2" friction="0.3"/>
+    <dynamics damping="0.05" friction="0.01"/>
     <axis xyz="0 0 1"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -1211,7 +1211,7 @@
     <child link="back_right_hub"/>
     <origin rpy="-1.570796326795 0 0" xyz="-0.147 -0.045 0.041"/>
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.2" friction="0.3"/>
+    <dynamics damping="0.05" friction="0.01"/>
     <axis xyz="-1 0 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -1262,7 +1262,7 @@
     <child link="back_right_upper_link"/>
     <origin rpy="0 1.570796326795 0" xyz="0 0 -0.02"/>
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.2" friction="0.3"/>
+    <dynamics damping="0.05" friction="0.01"/>
     <axis xyz="1 0 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -1313,7 +1313,7 @@
     <child link="back_right_lower_link"/>
     <origin rpy="0 1.570796326795 3.14159265359" xyz="-0.006 0.08 0"/>
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.2" friction="0.3"/>
+    <dynamics damping="0.05" friction="0.01"/>
     <axis xyz="0 0 1"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
