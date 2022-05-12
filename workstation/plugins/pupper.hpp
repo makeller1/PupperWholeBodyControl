@@ -2,12 +2,9 @@
 #define _PUPPER_PLUGIN_HH_
 
 #include <vector>
-
 #include <gazebo/gazebo.hh>
 #include <gazebo/physics/physics.hh>
-
 #include "Eigen/Dense"
-
 #include "workstation/PupperWBC.hpp"
 
 namespace gazebo{
@@ -64,7 +61,8 @@ private:
     Eigen::VectorXd joint_velocities_;
     Eigen::VectorXd body_COM_;
     Eigen::Quaterniond body_quat_;
-    Eigen::Vector3d body_COM_vel_;
+    Eigen::Vector3d body_COM_lin_vel_;
+    Eigen::Vector3d body_COM_ang_vel_;
     void updateJoints_();
     void updateBody_();
 
