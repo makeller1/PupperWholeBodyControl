@@ -63,7 +63,21 @@ namespace {
 
 }
 
-
+void printCOM(RigidBodyDynamics::Model& model){
+    static int k = 0;
+    Vector3d com_location;
+    double model_mass;
+    com_location.setZero();
+    VectorNd joint_angles_(model.q_size);
+    VectorNd joint_velocities_(model.qdot_size);
+    joint_angles_.setZero();
+    joint_angles_(model.q_size-1) = 1.0;
+    RigidBodyDynamics::Utils::CalcCenterOfMass(model,joint_angles_,joint_velocities_,NULL, model_mass, com_location);
+    cout << k << ")" << endl;
+    cout << "Total mass from RBDL: " << model_mass << endl;
+    cout << "Center of mass location: " << com_location.transpose() << endl;
+    k+=1;
+}
 std::shared_ptr<Model> createPupperModel(){
 
     auto model = std::make_shared<Model>();
@@ -214,7 +228,7 @@ std::shared_ptr<Model> createPupperModel(){
     /* ------ RIGHT SHROUD (mm) ------ */
 
     double right_shroud_mass = 15699.833984 * pow(mm2meter,3) * thin_PLA_density;
-    Vector3d right_shroud_com = Vector3d(-56.354591, 0.000044, 67.307060);
+    Vector3d right_shroud_com = mm2meter * Vector3d(-56.354591, 0.000044, 67.307060);
     Matrix3d right_shroud_inertia;
     right_shroud_inertia << 30641556.000000, -117.941475,      -1374718.500000,
                            -117.941475,       21280556.000000, -71.618393,
@@ -253,7 +267,6 @@ std::shared_ptr<Model> createPupperModel(){
 
 
 
-
     //////////////////////////////////
     //            JOINTS            //
     //////////////////////////////////
@@ -267,7 +280,7 @@ std::shared_ptr<Model> createPupperModel(){
     bottom2top.E = getRotation(0, 0, 0);
     bottom2top.r = Vector3d(0, 0.00, 0.087);
     model->AddBody(bottom_PCB_id, bottom2top, FIXED, top_PCB, "top_PCB");
-
+    
     // Fixed joint connecting front bulkhead to PCB
     SpatialTransform front_bulkhead_T;
     front_bulkhead_T.E = getRotation(-M_PI_2, 0, 0);
@@ -303,13 +316,13 @@ std::shared_ptr<Model> createPupperModel(){
     right_shroud_T.E = getRotation(M_PI, 0, 0);
     right_shroud_T.r = Vector3d(0.007, 0.085, 0);
     model->AddBody(bottom_PCB_id, right_shroud_T, FIXED, right_shroud, "right_shroud");
-    
+
     // Fixed joint connecting battery to PCB
     SpatialTransform battery_T;
     battery_T.E = getRotation(0, 0, M_PI_2);
     battery_T.r = Vector3d(-0.028, 0.0, 0.02425);
     model->AddBody(bottom_PCB_id, battery_T, FIXED, battery, "battery");
-    
+
     // Fixed joint connecting IMU to PCB
     SpatialTransform IMU_T;
     IMU_T.E = getRotation(0, 0, 0);
@@ -321,7 +334,6 @@ std::shared_ptr<Model> createPupperModel(){
     power_T.E = getRotation(0, 0, 0);
     power_T.r = Vector3d(-0.1, 0, 0.075);
     model->AddBody(bottom_PCB_id, power_T, FIXED, power_button, "power_button");
-
 
     
     
@@ -349,18 +361,14 @@ std::shared_ptr<Model> createPupperModel(){
     /* ----- ROTOR INERTIA ----- */
 
     Matrix3d rotor_inertia;
-    double rotor_rad = 0.002858;
-    double rotor_len = 0.03116;
-    double rotor_mass = 0.008;
-    int gear_ratio = 36;
-    rotor_inertia = cylinderInertia(rotor_rad, rotor_len, rotor_mass);
-    rotor_inertia *= SQUARE(gear_ratio);
+    double estimated_rotor_inertia = .0028;
+    rotor_inertia << 0.0, 0.0, 0.0,
+                     0.0, 0.0, 0.0,
+                     0.0, 0.0, estimated_rotor_inertia;
     Body rotor(0, Vector3d(0, 0, 0), rotor_inertia);
-
     cout << "Rotor Inertia: \n" << rotor_inertia << endl;
 
     // ----------------------------------
-
     // Join the rotor inertia with the clamp for ease
     SpatialTransform clamp2rotor;
     clamp2rotor.r = Vector3d(0, 0, 0);
@@ -368,7 +376,6 @@ std::shared_ptr<Model> createPupperModel(){
     clamp.Join(clamp2rotor, rotor);
 
     /* ------  MOTOR (m) ------ */
-
     double motor_rad  = 0.012;
     double motor_len  = 0.03;
     double motor_mass = 0.09;
@@ -517,6 +524,7 @@ std::shared_ptr<Model> createPupperModel(){
     back_left_motor_T.E = getRotation(0, M_PI_2, 0);
     back_left_motor_T.r = Vector3d(-0.110, 0.045, 0.041);
     model->AddBody(bottom_PCB_id, back_left_motor_T, FIXED, motor, "back_left_hip_motor");
+    printCOM(*model);
 
     // Revolute joint connecting back left hub to PCB
     Joint back_left_hub_joint(JointTypeRevolute, Vector3d(-1, 0, 0));
@@ -719,7 +727,8 @@ std::shared_ptr<Model> createPupperModel(){
     front_right_foot_T.r = Vector3d(0, -0.11, -0.009);
     uint front_right_foot_id = model->AddBody(front_right_lower_link_id, front_right_foot_T, FIXED, foot, "front_right_foot");
 
-
+    // cout << "Final COM:" << endl;
+    // printCOM(*model); // Final
 
     // // Test
     // cout << "---------- MODEL CREATION TESTING ------------\n" << endl;
@@ -743,6 +752,7 @@ std::shared_ptr<Model> createPupperModel(){
 
     // cout << "\n---------- KINEMATICS TESTING ------------\n" << endl;
     // VectorNd q(model->q_size); q.setZero();
+    // q(model->q_size-1) = 1.0;
     // Vector3d zero_offset(0, 0, 0);
 
     // for (int i = 2; i < model->mBodies.size(); i++){
@@ -843,6 +853,55 @@ std::shared_ptr<Model> createPupperModel(){
 //     RigidBodyDynamics::CompositeRigidBodyAlgorithm(*model, q, M);
 //     cout << "\nMass Matrix: \n" << M << endl;
 
+
+// // Creating a simple model root -> floating joint -> body with another body fixed offset from origin
+    // */
+    // Model model_test;
+    // model_test.gravity = Vector3d(0, 0, -9.81);
+    // double bottom_pcb_mass_test = 0.1; // kg
+
+    // // Create the bottom PCB
+    // Vector3d pcb_com_test = Vector3d(0.0,0.0,0.0);
+    // Matrix3d pcb_inertia_test;
+    // pcb_inertia_test << 0.001, 0,         0, 
+    //                     0,        0.001, 0,
+    //                     0,        0,         0.001;
+    // Body bottom_PCB_test = Body(bottom_pcb_mass_test, pcb_com_test, pcb_inertia_test);
+
+    // // Joint between PCB and ROOT
+    // Joint floating_joint_test(JointTypeFloatingBase);
+    // uint bottom_PCB_id_test = model_test.AddBody(0, Xtrans(Vector3d(0, 0, 0)), floating_joint_test, bottom_PCB_test, "bottom_PCB_test");
+
+    // // Add Battery to bottom PCB
+    // double batt_mass_test = 0.2; // Kg
+    // Vector3d batt_com_test(0, 0, 0);
+    // Matrix3d batt_inertia_test;
+    // batt_inertia_test << 0.001, 0,         0, 
+    //                     0,        0.001, 0,
+    //                     0,        0,         0.001;
+    // Body battery_test(batt_mass_test, batt_com_test, batt_inertia_test);
+
+    // // Fixed joint connecting battery to bottom PCB
+    // SpatialTransform battery_T_test;
+    // battery_T_test.E = getRotation(0, 0, 0);
+    // battery_T_test.r = Vector3d(-0.05, 0.0, 0); // m
+    // model_test.AddBody(bottom_PCB_id_test, battery_T_test, FIXED, battery_test, "battery_test");
+
+    // VectorNd q_test(model_test.q_size);
+    // VectorNd q_dot_test(model_test.qdot_size);
+    // q_test.setZero();
+    // q_test(model_test.q_size-1) = 1.0;
+
+    // // Solve for NonlinearEffects
+    // VectorNd b_g_test(model_test.dof_count);
+    // cout << "dof_count: " << model_test.dof_count << endl;
+    // b_g_test.setZero(); 
+    // cout << "q angles: " << q_test.transpose() << endl;
+    // cout << "q_dot: " << q_dot_test.transpose() << endl;
+    // NonlinearEffects(model_test, q_test, q_dot_test, b_g_test);
+    // cout << "b_g_ NonlinearEffects Test:" << b_g_test.transpose() << endl;
+    // cout << "TEST OF SIMPLE MODEL DONE \n\n\n" << endl;
+    // ///////////////////////////END//////////////////////////////////
 
 // ////////////////////////////////////////////////////////////////////////////////////////////////
 // ////////////////////////////////////////////////////////////////////////////////////////////////
