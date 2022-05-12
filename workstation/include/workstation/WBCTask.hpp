@@ -52,6 +52,8 @@ struct Task{
     Eigen::MatrixXd j_prev; 
     bool j_prev_updated = false;
 
+    // For diagnostics
+    Eigen::VectorXd x_ddot_desired; // Desired task accelerations
 };
 
 #endif
