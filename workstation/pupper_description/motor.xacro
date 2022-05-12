@@ -47,7 +47,7 @@
             <child  link = "${revolute_child}"/>
             <xacro:insert_block name = "revolute_origin"/>
             <limit upper = "1e10" lower = "-1e10" effort = "1e6" velocity = "1e6"/>
-            <dynamics damping = "0.2" friction = "0.3"/>
+            <dynamics damping = "0.01" friction = "0.0001"/>
             <axis xyz = "${axis}"/>
         </joint>
 
