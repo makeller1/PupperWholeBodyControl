@@ -45,8 +45,8 @@ struct Task{
     Eigen::Vector3d x_ddot_ff; // feedforward acceleration - zero initialized
 
     // Coefficients for the PD error term 
-    double Kp;
-    double Kd;
+    Eigen::Vector3d Kp;
+    Eigen::Vector3d Kd;
 
     // Previous Jacobian
     Eigen::MatrixXd j_prev; 

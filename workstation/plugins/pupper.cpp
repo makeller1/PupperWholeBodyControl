@@ -36,31 +36,25 @@ PupperPlugin::PupperPlugin(){
     static Task CoM_Position_Task;
     CoM_Position_Task.type    = BODY_POS;
     CoM_Position_Task.body_id = "bottom_PCB";
-    CoM_Position_Task.task_weight = 5000; // 10
+    CoM_Position_Task.task_weight = 100; // 10
     CoM_Position_Task.active_targets = {true, true, true};   
     CoM_Position_Task.pos_target << 0, 0, 0.08;
-    CoM_Position_Task.Kp = 0;//10;
-    CoM_Position_Task.Kd = 0;//5
+    CoM_Position_Task.Kp << 0,0,100; // zeros indicate we want the acceleration to be zero 
+    CoM_Position_Task.Kd << 0,0,10; 
     CoM_Position_Task.x_ddot_ff << 0, 0, 0;
 
     // Task for Body center of mass to be flat // .001
     static Task CoM_Orientation_Task;
     CoM_Orientation_Task.type    = BODY_ORI;
     CoM_Orientation_Task.body_id = "bottom_PCB";
-    CoM_Orientation_Task.task_weight = 5000; // 5000
+    CoM_Orientation_Task.task_weight = 100; // 5000
     CoM_Orientation_Task.quat_target = Eigen::Quaternion<double>::Identity();
     CoM_Orientation_Task.active_targets = {true, true, true};
-    CoM_Orientation_Task.Kp = 0; //2
-    CoM_Orientation_Task.Kd = 0; 
+    float com_ori_Kp = 1000;
+    float com_ori_Kd = 100;
+    CoM_Orientation_Task.Kp << com_ori_Kp, com_ori_Kp, com_ori_Kp; 
+    CoM_Orientation_Task.Kd << com_ori_Kd, com_ori_Kd, com_ori_Kd; 
     CoM_Orientation_Task.x_ddot_ff << 0, 0, 0;
-
-    // static Task JointPositionTask; // .01
-    // JointPositionTask.type = JOINT_POS;
-    // JointPositionTask.task_weight = 1; //0.1;
-    // JointPositionTask.joint_target = VectorNd::Zero(12);
-    // JointPositionTask.active_targets = {true, false, false, true, false, false, true, false, false, true, false, false};
-    // JointPositionTask.Kp = 200;
-    // JointPositionTask.Kd = 200;
 
     static Task JointPositionTask; 
     JointPositionTask.type = JOINT_POS;
@@ -71,56 +65,53 @@ PupperPlugin::PupperPlugin(){
                                         0.0,  M_PI_4,  M_PI_2,
                                         0.0, -M_PI_4, -M_PI_2;
     JointPositionTask.active_targets = {true, false, false, true, false, false, true, false, false, true, false, false};
-    JointPositionTask.Kp = 200; //600; // When tuning remember: tau = M*q_ddot + ... and q_dotdot = Kp (theta-theta_d) + Kd(omega)
-    JointPositionTask.Kd = 10; //25
+    JointPositionTask.Kp << 0,0,0; //600 : The three gains are applied to each leg
+    JointPositionTask.Kd << 0,0,0; //25 : When tuning remember: tau = M*q_ddot + ... and q_dotdot = Kp (theta-theta_d) + Kd(omega)
 
-    foot_pos_Kp_ = 0; //1000;
-    foot_pos_Kd_ = 0; //20;
-    foot_pos_w_  = 100; // .01
-    // float_pos_Kp_ = 50; //50
-    // float_pos_Kd_ = 0; // 0
-    // float_pos_w_  = 0; // 50
+    Eigen::Vector3d foot_pos_Kp = {100, 100, 0}; 
+    Eigen::Vector3d foot_pos_Kd = {20, 20, 0}; 
+    float foot_pos_w  = 1; // .01
 
     // Keep the front left foot in place
     static Task FLFootTask;
     FLFootTask.type = BODY_POS;
     FLFootTask.body_id = "front_left_foot";
-    FLFootTask.task_weight = foot_pos_w_;
+    FLFootTask.task_weight = foot_pos_w;
     FLFootTask.active_targets = {true, true, true}; 
-    FLFootTask.pos_target << 0.08, 0.075, -0.08;
-    FLFootTask.Kp = foot_pos_Kp_;
-    FLFootTask.Kd = foot_pos_Kd_;
+    FLFootTask.pos_target << 0.08, 0.045, -0.08; // .075
+    FLFootTask.Kp = foot_pos_Kp;
+    FLFootTask.Kd = foot_pos_Kd;
 
     // Keep the front right foot in place
     static Task FRFootTask;
     FRFootTask.type = BODY_POS;
     FRFootTask.body_id = "front_right_foot";
-    FRFootTask.task_weight = foot_pos_w_;
+    FRFootTask.task_weight = 0.01;
     FRFootTask.active_targets = {true, true, true};  
-    FRFootTask.pos_target << 0.08, -0.075, -0.08; 
+    FRFootTask.pos_target << 0.08, -0.075, -0.04; 
     FRFootTask.x_ddot_ff << 0.0, 0.0, 0.0;
-    FRFootTask.Kp = foot_pos_Kp_;
-    FRFootTask.Kd = foot_pos_Kd_;
+    FRFootTask.Kp << 2000, 2000, 2000;
+    FRFootTask.Kd << 20, 20, 20;
 
     // Keep the back left foot in place
     static Task BLFootTask;
     BLFootTask.type = BODY_POS;
     BLFootTask.body_id = "back_left_foot";
-    BLFootTask.task_weight = foot_pos_w_;
+    BLFootTask.task_weight = foot_pos_w;
     BLFootTask.active_targets = {true, true, true};  
-    BLFootTask.pos_target << -0.11, 0.075, -0.08;
-    BLFootTask.Kp = foot_pos_Kp_;
-    BLFootTask.Kd = foot_pos_Kd_;
+    BLFootTask.pos_target << -0.11, 0.165, -0.08;
+    BLFootTask.Kp = foot_pos_Kp;
+    BLFootTask.Kd = foot_pos_Kd;
 
     // Keep the back right foot in place
     static Task BRFootTask;
     BRFootTask.type = BODY_POS;
     BRFootTask.body_id = "back_right_foot";
-    BRFootTask.task_weight = foot_pos_w_;
+    BRFootTask.task_weight = foot_pos_w;
     BRFootTask.active_targets =  {true, true, true}; 
-    BRFootTask.pos_target << -0.11, -0.065, -0.08;
-    BRFootTask.Kp = foot_pos_Kp_;
-    BRFootTask.Kd = foot_pos_Kd_;
+    BRFootTask.pos_target << -0.11, -0.165, -0.08;
+    BRFootTask.Kp = foot_pos_Kp;
+    BRFootTask.Kd = foot_pos_Kd;
 
     WBC_.addTask("COM_POSITION", &CoM_Position_Task);
     WBC_.addTask("COM_ORIENTATION", &CoM_Orientation_Task);
@@ -207,8 +198,8 @@ void PupperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 
 // Called on every simulation time step
 void PupperPlugin::onUpdate(const common::UpdateInfo &_info){
-    static vector<float> init_angles = {0.0,  M_PI_4,  M_PI_2, 
-                                        0.0, -M_PI_4, -M_PI_2,
+    static vector<float> init_angles = {-0.4,  M_PI_4,  M_PI_2, 
+                                        0.4, -M_PI_4, -M_PI_2,
                                         0.0,  M_PI_4,  M_PI_2,
                                         0.0, -M_PI_4, -M_PI_2};
 
@@ -222,6 +213,10 @@ void PupperPlugin::onUpdate(const common::UpdateInfo &_info){
     // float target_roll = M_PI/12 * sin(0.5 * simtime_); // 0.5 HZ (2 sec)
     // WBC_.getTask("COM_ORIENTATION")->quat_target = Eigen::AngleAxisd(target_roll, Eigen::Vector3d::UnitX());
 
+    // Oscillate floating foot position
+    float target_z = -0.04 + 0.04*sin(3.0*simtime_/1000.0); // 3 Hz (.3 sec)
+    float target_y = -0.075 + 0.04*cos(3.0*simtime_/1000.0);
+    WBC_.getTask("FRONT_RIGHT_FOOT_POSITION")->pos_target << 0.08, target_y, target_z; 
 
     // First 5 seconds
     if (simtime_ - start_time < 5e3){
@@ -301,13 +296,10 @@ void PupperPlugin::controlAllJoints(vector<float> torques){
 
 // Set joint positions through Gazebo (useful for debugging)
 void PupperPlugin::setJointPositions(vector<float> angles){
-    cout << "Torques: ";
     for (int i = 0; i < 12; i++){
         double error = angleDiff(angles[i], all_joints_[i]->Position(0));
         control_torques_[i] = 10*error;
-        cout << control_torques_[i] << ", ";
     }
-    cout << endl;
 }
 
 
@@ -365,7 +357,7 @@ void PupperPlugin::updateBody_(){
 // Tell the controller the current state of the robot
 void PupperPlugin::updateController_(){
     // WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, feet_in_contact_, simtime_/1e3);
-    WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, {true,true,true,true},simtime_/1e3);
+    WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, {true,true,true,false},simtime_/1e3);
     WBC_.updateBodyPosTask("COM_POSITION", body_COM_);
     WBC_.updateBodyOriTask("COM_ORIENTATION", body_quat_);
     VectorNd jointPos(12);

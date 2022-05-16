@@ -51,8 +51,8 @@ int main(int argc, char** argv){
     CoM_Position_Task.task_weight = 0.1;
     CoM_Position_Task.active_targets = {false, false, true};    // only account for z-position
     CoM_Position_Task.pos_target << 0, 0, 0.10;
-    CoM_Position_Task.Kp = 100;
-    CoM_Position_Task.Kd = 0;
+    // CoM_Position_Task.Kp = 100;
+    // CoM_Position_Task.Kd = 0;
 
     // Task for Body center of mass to be flat
     Task CoM_Orientation_Task;
@@ -60,8 +60,8 @@ int main(int argc, char** argv){
     CoM_Orientation_Task.type    = BODY_ORI;
     CoM_Orientation_Task.task_weight = 1;
     CoM_Orientation_Task.quat_target = Eigen::Quaternion<double>::Identity();
-    CoM_Orientation_Task.Kp = 500;
-    CoM_Orientation_Task.Kd = 0;
+    // CoM_Orientation_Task.Kp = 500;
+    // CoM_Orientation_Task.Kd = 0;
 
     // Task for joints to avoid limits
     Task JointPositionTask;
@@ -69,8 +69,8 @@ int main(int argc, char** argv){
     JointPositionTask.task_weight = 0.1;
     JointPositionTask.joint_target = VectorNd::Zero(12);
     JointPositionTask.active_targets = {true, false, false, true, false, false, true, false, false, true, false, false};
-    JointPositionTask.Kp = 1000;
-    JointPositionTask.Kd = 0;
+    // JointPositionTask.Kp = 1000;
+    // JointPositionTask.Kd = 0;
 
     // Foot contact tasks
     Task FrontLeftContactTask;
@@ -78,8 +78,8 @@ int main(int argc, char** argv){
     FrontLeftContactTask.task_weight = 0.1;
     FrontLeftContactTask.active_targets = {false, false, true};
     FrontLeftContactTask.pos_target << 0, 0, 0; 
-    FrontLeftContactTask.Kp = 100;
-    FrontLeftContactTask.Kd = 0;
+    // FrontLeftContactTask.Kp = 100;
+    // FrontLeftContactTask.Kd = 0;
 
     // Add the tasks with priority 0 and 1
     Pup.addTask("COM_elevation", &CoM_Position_Task);

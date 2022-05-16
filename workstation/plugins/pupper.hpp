@@ -76,13 +76,6 @@ private:
     std::array<float, ROBOT_NUM_JOINTS> control_torques_;
     void updateController_();
     void applyTorques_();
-    float foot_pos_Kp_;                         // Contacting foot task parameter
-    float foot_pos_Kd_;                         // Contacting foot task parameter
-    float foot_pos_w_;                          // Contacting foot task parameter
-
-    float float_pos_Kp_;                         // floating foot task parameter
-    float float_pos_Kd_;                         // floating foot task parameter
-    float float_pos_w_;                          // floating foot task parameter
 
     double start_time;                           // start time of simulation ms
 };

@@ -591,9 +591,9 @@ void PupperWBC::printDiag(){
                 break;
 
         }
-        std::cout << std::setprecision(8) << std::fixed;
+        // std::cout << std::setprecision(8) << std::fixed;
         cout << "###################################" << endl;
-        cout << "Task Jacobian: \n" << j << endl;
+        // cout << "Task Jacobian: \n" << j << endl;
         std::cout << std::setprecision(3) << std::fixed;
         cout << "Task " << task_name << endl;
         cout << "Weight: " << T->task_weight << endl;
@@ -618,13 +618,11 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     //       0  , A_fr ];          [ (20x18), 20x12 ]
 
     // TODO: Use update routines instead of FormQP every call
-    //       
-    //       Set weights in main function
+    //       Set parameters in main function
 
     // Parameters
-    double lambda_q = 0; // .001 Penalizes high joint accelerations
+    double lambda_q = 0.001; // Penalizes high joint accelerations (q_ddot^2)
     VectorNd rf_desired = VectorNd::Zero(12);// Desired reaction forces
-    rf_desired << 1,-1,7.5, 1,1,7.5, -1,-1,3.5, -1,1,3.5; // Note: 6.5 back and 4.5 front was really close to standing
     double lambda_rf_z = 0; // 1 Normal reaction force penalty (minimize impacts)
     double lambda_rf_xy = 0; // 10 Tangential reaction force penalty (minimize slipping - prevent lateral force contribution to ori task)
     double w_rf = 0; //1  Reaction force tracking penalty (follow desired reaction force)
@@ -637,8 +635,8 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     // Objective is of the form 1/2(x'Px) + q'x
 
     // Form task cost matrix and vector
-    MatrixNd cost_t_mat = MatrixNd::Zero(NUM_JOINTS,NUM_JOINTS);
-    VectorNd cost_t_vec = VectorNd::Zero(NUM_JOINTS);
+    MatrixNd cost_t_mat = MatrixNd::Zero(NUM_JOINTS,NUM_JOINTS); // P
+    VectorNd cost_t_vec = VectorNd::Zero(NUM_JOINTS); // q
 
     for (int i = 0; i < robot_tasks_.size(); i++ ){
         Task* T = robot_tasks_[i];
@@ -666,17 +664,20 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
         switch(T->type){
             // Note desired acceleration is -x_ddot_desired
             case BODY_ORI:
-                x_ddot_desired = T->Kp * quatDiff(T->quat_measured, T->quat_target) + T->Kd * taskDerivative_(T) - T->x_ddot_ff;
+                x_ddot_desired = T->Kp.cwiseProduct(quatDiff(T->quat_measured, T->quat_target)) + T->Kd.cwiseProduct(taskDerivative_(T) - T->x_ddot_ff);
                 break;
 
             case BODY_POS:
-                x_ddot_desired = T->Kp * (T->pos_measured - T->pos_target) + T->Kd * (taskDerivative_(T) - T->dpos_target) - T->x_ddot_ff;
+                x_ddot_desired = T->Kp.cwiseProduct((T->pos_measured - T->pos_target)) + T->Kd.cwiseProduct(taskDerivative_(T) - T->dpos_target) - T->x_ddot_ff;
                 break;
 
             case JOINT_POS:
-                x_ddot_desired = T->Kp * (T->joint_measured - T->joint_target) + T->Kd * (taskDerivative_(T) - T->djoint_target);
+                Eigen::Matrix<double, 12, 1> Kp_rep, Kd_rep;
+                // Kp and Kd are repeated for all 4 legs
+                Kp_rep << T->Kp, T->Kp, T->Kp, T->Kp;
+                Kd_rep << T->Kd, T->Kd, T->Kd, T->Kd;
+                x_ddot_desired = Kp_rep.cwiseProduct(T->joint_measured - T->joint_target) + Kd_rep.cwiseProduct(taskDerivative_(T) - T->djoint_target);
                 break;
-
         }
         
         // Remove inactive rows
@@ -978,9 +979,9 @@ VectorNd PupperWBC::solveQP(int n, int m, MatrixNd &P, c_float  *q, MatrixNd &A,
         settings->eps_rel = 0.0;       // Change relative tolerance to handle large costs
         settings->eps_prim_inf = 1e-2; // Primal infeasibility tolerance
         settings->eps_dual_inf = 1e-2; // Dual infeasibility tolerance
-        settings->polish = 1; // Attempt for high quality solution
+        // settings->polish = 1; // For high quality solution
         settings->verbose = 1;   // Print information? 
-        
+        // settings->scaling = 20; // Number of scaling iterations - could speed up solver and avoid failures
     }
 
     // Setup workspace
@@ -992,10 +993,12 @@ VectorNd PupperWBC::solveQP(int n, int m, MatrixNd &P, c_float  *q, MatrixNd &A,
     if (exitflag != 0){
         string message = "OSQP Setup failed with code: " + std::to_string(exitflag);
         throw(std::runtime_error(message));
+        // TODO: Engage motor braking
     }
-    if (work->info->status_val != 1){
+    if (work->info->status_val != 1 && work->info->status_val != 2){
         string message = "OSQP Solve failed with code: " + std::to_string(work->info->status_val);
         throw(std::runtime_error(message));
+        // TODO: Engage motor braking
     }
 
     // Cleanup
