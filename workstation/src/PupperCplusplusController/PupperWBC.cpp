@@ -326,16 +326,6 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
 
     //---------------------------TEST OPTIMIZATION SOLUTION--------------------------//
     //-------------------------------------------------------------------------------//
-    // Currently broken because RBDL's forward dynamics is returning nonsense. 
-    // Reason for test: OSQP solution for qddot does not match simulation (i.e. z acceleration positive while pupper falling)
-    //                                                                     (    joint velocities not matching               )
-    // The accelerations we get from RBDL forward dynamics should match what the solver gives.
-    // They dont. 
-    //                             
-    // However, there's an error somewhere in the use of RBDL's forward dynamics. When initialziing joint angles 
-    // to non-zero values (crouched position), RBDL gives incorrect joint velocities
-    // 
-
 
     VectorNd Fr = optimal_solution.tail(12); // reaction forces
     // VectorNd tau_gen = VectorNd::Zero(18); // generalized torques
