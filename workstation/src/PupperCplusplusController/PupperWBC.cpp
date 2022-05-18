@@ -4,7 +4,14 @@
 #include <iomanip> // for setting cout precision
 #include "workstation/PupperWBC.hpp"
 #include "rbdl/addons/urdfreader/urdfreader.h"
-#include <string.h>
+
+// TODO: 
+/*
+    - Use update routines instead of FormQP every call
+    - Set QP parameters in main function
+    - Move x_ddot_desired calculation to its own function
+    - Saturate x_ddot_desired
+*/
 
 using std::vector;
 using std::array;
@@ -607,8 +614,7 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     // A = [ M  , -Jc'  ;   Sizes: [  18x18 , 18x12 ]
     //       0  , A_fr ];          [ (20x18), 20x12 ]
 
-    // TODO: Use update routines instead of FormQP every call
-    //       Set parameters in main function
+    
 
     // Parameters
     double lambda_q = 0.001; // Penalizes high joint accelerations (q_ddot^2)

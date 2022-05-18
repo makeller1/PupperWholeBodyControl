@@ -2,10 +2,13 @@
 #define _PUPPER_PLUGIN_HH_
 
 #include <vector>
+#include <array>
 #include <gazebo/gazebo.hh>
 #include <gazebo/physics/physics.hh>
 #include "Eigen/Dense"
 #include "workstation/PupperWBC.hpp"
+#include "workstation/WBCTask.hpp"
+#include "workstation/WBCTaskMaster.hpp"
 
 namespace gazebo{
 
@@ -14,7 +17,7 @@ enum PupperLegs{
     BACK_LEFT_LEG,
     BACK_RIGHT_LEG,
     FRONT_LEFT_LEG,
-    FRONT_RIGHT_LEG,
+    FRONT_RIGHT_LEG
 };
 
 //A plugin to control a the Stanford Pupper V3 robot
@@ -40,6 +43,7 @@ public:
     // Debug function
     void setJointPositions(std::vector<float> angles);
 
+    std::array<bool, 4> feet_in_contact_manual; // Prescribed feet in contact Order: BL, BR, FL, FR
 private:
     // Model
     physics::ModelPtr model_;                    // Pointer to the model in Gazebo
@@ -68,6 +72,7 @@ private:
 
     // Control
     PupperWBC WBC_;
+    void trackOneFoot_();                       // Tasks for 3 leg stance and 1 foot tracking
     double simtime_;                            // ms current simulation time
     double last_update_time_;                   // ms used to keep track of update rate
     double update_interval_;                    // ms between each control update loop
@@ -76,7 +81,7 @@ private:
     std::array<float, ROBOT_NUM_JOINTS> control_torques_;
     void updateController_();
     void applyTorques_();
-
+    TaskMaster taskmaster_;                     // Sets tasks and updates tasks for a specific goal
     double start_time;                           // start time of simulation ms
 };
 

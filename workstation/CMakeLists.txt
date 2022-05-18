@@ -57,6 +57,7 @@ catkin_package(
 add_library(${PROJECT_NAME} 
   src/PupperCplusplusController/PupperModel.cpp
   src/PupperCplusplusController/PupperWBC.cpp
+  src/PupperCplusplusController/WBCTaskMaster.cpp
 )
 
 # Link all necessary libraries to our library
