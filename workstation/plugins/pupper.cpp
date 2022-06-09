@@ -1,6 +1,7 @@
 #include "pupper.hpp"
 #include "workstation/PupperModel.h"
 #include "workstation/PupperUrdfString.hpp"
+#include "workstation/StateEstimation.hpp"
 #include <iostream>
 #include <math.h>
 #include <string>
@@ -148,9 +149,6 @@ void PupperPlugin::onUpdate(const common::UpdateInfo &_info){
 
 
 
-
-
-
 // =========================================================================================
 // ----------------------------       CONTROL SIMULATION       -----------------------------
 // =========================================================================================
@@ -232,12 +230,12 @@ void PupperPlugin::updateBody_(){
     auto body_lin_vel  = model_->WorldLinearVel();
     auto body_ang_vel = model_->WorldAngularVel();
     
-    body_COM_[0] = body_pose.Pos().X();
-    body_COM_[1] = body_pose.Pos().Y();
+    // Measured with Gazebo
+    // body_COM_[0] = body_pose.Pos().X();
+    // body_COM_[1] = body_pose.Pos().Y();
     body_COM_[2] = body_pose.Pos().Z();
 
-    // cout << "Z measured  : " << body_COM_[2] << endl;
-    // cout << "Z calculated: " << WBC_.getCalculatedHeight() << endl;
+    cout << "Z measured : " << body_pose.Pos().Z() << endl;
 
     body_quat_.x() = body_pose.Rot().X();
     body_quat_.y() = body_pose.Rot().Y();
@@ -256,20 +254,20 @@ void PupperPlugin::updateBody_(){
 // Tell the controller the current state of the robot
 void PupperPlugin::updateController_(){
     // WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, feet_in_contact_, simtime_/1e3);
-    WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, feet_in_contact_manual,simtime_/1e3);
+    WBC_.updateController(joint_positions_, joint_velocities_, body_quat_, feet_in_contact_manual,simtime_/1e3);
+    cout << "Z measured : " << body_COM_[2] << endl;
+    body_COM_[2] = estimateHeight(WBC_, feet_in_contact_manual);
+    cout << "Z estimate : " << body_COM_[2] << endl;
     WBC_.updateBodyPosTask("COM_POSITION", body_COM_);
     WBC_.updateBodyOriTask("COM_ORIENTATION", body_quat_);
     VectorNd jointPos(12);
     std::copy(joint_positions_.data(), joint_positions_.data() + 12, jointPos.data());
     WBC_.updateJointTask("JOINT_ANGLES", jointPos);
-    WBC_.updateBodyPosTask("BACK_LEFT_FOOT_POSITION",   WBC_.getRelativeBodyLocation("back_left_foot"));
-    WBC_.updateBodyPosTask("BACK_RIGHT_FOOT_POSITION",  WBC_.getRelativeBodyLocation("back_right_foot"));
-    WBC_.updateBodyPosTask("FRONT_LEFT_FOOT_POSITION",  WBC_.getRelativeBodyLocation("front_left_foot"));
-    WBC_.updateBodyPosTask("FRONT_RIGHT_FOOT_POSITION", WBC_.getRelativeBodyLocation("front_right_foot"));
-    // cout << "COM height to ground = " << body_COM_[2] << endl;
+    WBC_.updateBodyPosTask("BACK_LEFT_FOOT_POS",   WBC_.getRelativeBodyLocation("back_left_foot"));
+    WBC_.updateBodyPosTask("BACK_RIGHT_FOOT_POS",  WBC_.getRelativeBodyLocation("back_right_foot"));
+    WBC_.updateBodyPosTask("FRONT_LEFT_FOOT_POS",  WBC_.getRelativeBodyLocation("front_left_foot"));
+    WBC_.updateBodyPosTask("FRONT_RIGHT_FOOT_POS", WBC_.getRelativeBodyLocation("front_right_foot"));
 }
-
-
 
 
 // =========================================================================================

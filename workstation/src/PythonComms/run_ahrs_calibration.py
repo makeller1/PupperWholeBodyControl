@@ -1,7 +1,7 @@
 # This code is used to calibrate the magnetometer and gyroscope of the IMU.
 # Procedure:
 #  1. Start with pupper at rest. Gyroscope bias will be determined now. (5 seconds)
-#  2. After medium beep, rotate pupper so that it's belly follows the surface of a sphere. Magnetometer additive bias will be determined now. (45 seconds)
+#  2. After medium beep, trace the surface of a sphere by rotating the pupper. Magnetometer additive bias will be determined now. (45 seconds)
 #  3. After short beep, repeat step 2. Magnetometer multiplicative bias will be determined now. (45 seconds)
 #  4. After a long beep, calibration is complete. 
 # Note: Teensy must be restarted to run Calibration more than once 
@@ -22,6 +22,9 @@ def main():
     # Setup interfaces
     hardware_interface = HardwareInterface.HardwareInterface(port=SERIAL_PORT)
 
+    # Set max current for joint regulation during calibration
+    hardware_interface.set_max_current(3.0) # Saturation (not fault)
+
     # Put Pupper into torque control mode (and out of error mode if it is)
     hardware_interface.set_trq_mode()
 
@@ -34,7 +37,7 @@ def main():
     now = time.time()
     i = 0
     try:
-        while i < 86928+1001: 
+        while i < 86928+1001: # Number of samples required for calibration
             if time.time() - now >= dt:
 
                 hardware_interface.run_calibration()
@@ -47,7 +50,7 @@ def main():
                 i = i + 1
                 
     except KeyboardInterrupt:
-        hardware_interface.set_torque([0]*6) # Zero torques when quit
+        hardware_interface.set_torque([0]*12) # Zero torques when quit
         print("Stopping motors.")
 
 if __name__ == "__main__":

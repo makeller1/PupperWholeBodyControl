@@ -1,3 +1,5 @@
+// This is obsolete code used to troubleshoot the WBC and hardware communication
+
 #include <iostream>
 #include "workstation/PupperWBC.hpp"
 #include "workstation/PupperModel.h"

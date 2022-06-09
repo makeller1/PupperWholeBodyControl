@@ -48,7 +48,7 @@ def main():
     def commandCallback(msg):
         commands = list(msg.data)
         data.trq_commands = commands[:12]
-        data.dir_commands = list(np.array(commands[12:]) > 0)
+        data.dir_commands = list( (np.array(commands[12:]) > 0) - 0.5)
 
     # Create the ROS subscriber and publisher
     state_pub   = rospy.Publisher("pupper_state", JointState, queue_size=1)
@@ -71,7 +71,7 @@ def main():
     # Zero motors
     hardware_interface.zero_motors() 
     print("Zeroing Done")
-    hardware_interface.set_max_current(3.0) # Saturation (not fault)
+    hardware_interface.set_max_current(0.5) # Saturation (not fault)
     
     current_commands = [0]*12
     try:
@@ -79,7 +79,8 @@ def main():
 
             command = joystick_interface.get_command()
             
-            #Print velocity states
+            # #Print states
+            # PupComm.print_states(0)
             # PupComm.print_states(1)
 
             # Read data from pupper
@@ -113,9 +114,6 @@ def main():
             WBC_trq_commands = data.trq_commands
             WBC_dir_commands = data.dir_commands
 
-            # For Testing : Override torque command
-            # WBC_commands[9] = .5
-
             # Tranform to Teensy's frame
             WBC_trq_reordered = PupComm.reorder_commands(WBC_trq_commands)
             WBC_dir_reordered = PupComm.reorder_commands(WBC_dir_commands)
@@ -129,18 +127,19 @@ def main():
 
                 vel = PupComm.robot_states_["vel"][i]
                 current_commands[i] = trq_to_current(torque_cmd, q_ddot_des, vel)
-                if i == 0:
-                    print("Velocity:",vel)
-                    print("Desired torque",torque_cmd)
-                    print("Desired current",current_commands[i])
             
+            # print("Reordered commands:")
+            # print("Desired currents: "+' '.join('{:.2f}'.format(f) for f in current_commands))
+            # print("Desired torques : "+' '.join('{:.2f}'.format(f) for f in WBC_trq_reordered))
+            # print("Desired dir.: ", WBC_dir_reordered)
+
             hardware_interface.set_torque(current_commands) # misnomer until trq to current transformation is done on Teensy
             
             # Sleep to maintain the desired frequency
             rate.sleep()
 
             # Check if the pupper has faulted
-            PupComm.check_errors() # Note: breaking here is not good - somehow causes a delay in the Teensy which affects fault handling
+            PupComm.check_errors() # Note: breaking here should be avoided since it causes a delay in the Teensy which affects fault handling
 
             # Break loop when "q" is pressed
             if command.activate_event == 1:

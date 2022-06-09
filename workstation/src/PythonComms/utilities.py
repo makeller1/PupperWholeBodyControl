@@ -93,7 +93,7 @@ def kin_friction(w, i_damping, drive_mode):
     elif w > w2:
         i_k = m0*w1 + m1*(w2-w1) + m2*(w-w2) + b
 
-    # Add damping term at higher velocities to prevent chance of velocity blowing up (since kinetic friction is stochastic)
+    # Add damping term at higher velocities to prevent velocity blowing up (kinetic friction is stochastic)
     if w >= .1:
         i_k = i_k - i_damping
     # Reduce compensation in backdrive mode (determined experimentally)

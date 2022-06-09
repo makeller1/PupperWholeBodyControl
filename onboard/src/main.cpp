@@ -10,14 +10,14 @@
 
 const int CONTROL_DELAY = 1000;//1000;  // micros - mathew (Setting this to 10 results in CAN error)
 const int OBSERVE_DELAY = 1000;//1000; // micros
-const float MAX_CURRENT = 1.0; // Amps - Default saturation value, is changed by run_djipupper
+const float MAX_CURRENT_DEFAULT = 1.0; // Amps - Default saturation value, is changed by run_djipupper
 
 const bool send_robot_states = true; // This is needed to send motor / IMU data over serial - mathew
 const bool print_cal_params = false; // Used to print the calibration parameters stored in persistent mem
 bool print_debug_info = false; 
 
 const bool ECHO_COMMANDS = false; // Set true for debugging
-const bool AHRS_ENABLED = true; // Are we running with the AHRS/IMU enabled?
+const bool AHRS_ENABLED = false; // Are we running with the AHRS/IMU enabled?
 
 // Calibration parameters
 float b_gyr_x;
@@ -131,7 +131,7 @@ void setup(void) {
   last_header_ts = millis();
 
   // Runtime config
-  drive.SetMaxCurrent(MAX_CURRENT);
+  drive.SetMaxCurrent(MAX_CURRENT_DEFAULT);
   options.delimiter = ',';
   options.positions = true;
   options.velocities = true;

@@ -57,8 +57,16 @@ PupperWBC::PupperWBC(){
     joint_velocities_ = VectorNd::Zero(NUM_JOINTS);
     control_torques_  = VectorNd::Zero(NUM_JOINTS);
     control_qddot_ = VectorNd::Zero(ROBOT_NUM_JOINTS);
-    robot_position_   = VectorNd::Zero(3);
     feet_in_contact_ = {true, true, true, true};
+
+    // Default WBC parameters
+    lambda_q = 0.001; 
+    rf_desired = VectorNd::Zero(12);
+    lambda_rf_z = 0; 
+    lambda_rf_xy = 0; 
+    w_rf_xy = 0; 
+    w_rf_z = 0; 
+    mu = .3;
 
     // Create solver structs
     QP_settings_ = std::make_unique<OSQPSettings>();
@@ -82,7 +90,6 @@ PupperWBC::PupperWBC(){
 // Update the controller with the current state of the robot
 void PupperWBC::updateController(const VectorNd& joint_angles, 
                                  const VectorNd& joint_velocities,
-                                 const Eigen::Vector3d& body_position,
                                  const Eigen::Quaterniond& body_quaternion,
                                  const array<bool, 4>& feet_in_contact,
                                  const double time_s){
@@ -91,9 +98,6 @@ void PupperWBC::updateController(const VectorNd& joint_angles,
         joint_angles_[i+6]     = joint_angles[i];
         joint_velocities_[i+6] = joint_velocities[i];
     }
-
-    // Record the body position vector NOTE: this does not update RBDL's translation joints
-    robot_position_ = body_position;
 
     // Record the body orientation quaternion
     robot_orientation_.w() = body_quaternion.w();
@@ -110,9 +114,6 @@ void PupperWBC::updateController(const VectorNd& joint_angles,
     t_prev_ = time_now_;
     time_now_ = time_s;
 
-    // Update robot height
-    robot_height_ = calcRobotHeight_();
-
     // Update the problem matrices
     massMat_.setZero(); // Required!
     Jc_.setZero(); // Just to be safe; not clear if this is required 
@@ -125,9 +126,6 @@ void PupperWBC::updateController(const VectorNd& joint_angles,
     if (b_g_[2]==0.0){
         cout << "WARNING: NONLINEAR EFFECTS DISABLED" << endl;
     }
-    cout << "b_g_: ---------" << endl;
-    std::cout << std::setprecision(5) << std::fixed;
-    cout << b_g_.transpose() << endl; 
 }
 
 // Add a task to the IHWBC controller
@@ -136,6 +134,8 @@ void PupperWBC::addTask(string name, Task* T){
     robot_tasks_.push_back(T);
 
     switch(T->type){
+        case REACTION_FORCE:
+            // Fall through to body pos case
         case BODY_POS:
             if (Pupper_.GetBodyId(T->body_id.c_str()) == -1){
                 string message = "Task name " + T->body_id + " did not match any known body";
@@ -186,7 +186,7 @@ void PupperWBC::updateBodyPosTask(std::string name, Eigen::Vector3d state){
         return;
     }
     Task* T = getTask(name);
-    assert(T->type == BODY_POS);
+    assert(T->type == BODY_POS || T->type == REACTION_FORCE);
     T->last_pos_measured = T->pos_measured;
     T->pos_measured = state;
 }
@@ -206,21 +206,20 @@ Task* PupperWBC::getTask(string name){
     return robot_tasks_[task_indices_[name]];
 }
 
-double PupperWBC::getCalculatedHeight(){
-    return robot_height_;
-}
-
 VectorNd PupperWBC::taskDerivative_(const Task *T){
     VectorNd deriv;
-    const float dt = now() - t_prev_;
+    float dt = now() - t_prev_;
 
     switch (T->type){
+        case REACTION_FORCE:
+            // Fall through to body pos case
 
         case BODY_POS:
+        {
             deriv.resize(3);
             deriv = (T->pos_measured - T->last_pos_measured)/dt; //TODO: Replace with j*q_dot
             break;
-
+        }
         case BODY_ORI:
             deriv.resize(3);
             deriv = 2.0*quatDiff(T->quat_measured, T->last_quat_measured)/dt;
@@ -237,7 +236,7 @@ VectorNd PupperWBC::taskDerivative_(const Task *T){
 }
 
 VectorNd PupperWBC::getRelativeBodyLocation(std::string body_name, VectorNd offset){
-    // Returns position in base coordinates (fixed to bottom pcb origin but same orientation as global)
+    // Returns position in base (root) coordinates
     int id = Pupper_.GetBodyId(body_name.c_str());
     VectorNd pos = CalcBodyToBaseCoordinates(Pupper_, joint_angles_, id, offset, false);
     return pos;
@@ -315,24 +314,10 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
     VectorNd tau = (massMat_*q_ddot + b_g_ - Jc_.transpose()*F_r).tail(ROBOT_NUM_JOINTS);
     // Store optimal motor accelerations
     control_qddot_ = q_ddot.tail(ROBOT_NUM_JOINTS);
-    // Store optimal generalized accelerations
+
+    // Store optimal solution for diagnostics and tuning
     optimal_qddot_ = q_ddot;
-
-    // cout << "Back left hip control torque: " << tau(0) << endl;
-    // cout<< "Torques: " << endl;
-    // for (int i = 0; i < tau.size(); i++){
-    //     cout<< tau[i] << endl;  
-    // }
-
-    // Troubleshooting (confirmed correct)
-    //VectorNd sol = VectorNd::Zero(6);
-    // sol = (massMat_*q_ddot + b_g_ - Jc_.transpose()*F_r).head(6); 
-    // cout << "SOL: \n" << sol << endl;
-    // cout << "Jc': \n" << Jc_.transpose().topRows(6).format(f) << endl;
-    
-
-    //---------------------------TEST OPTIMIZATION SOLUTION--------------------------//
-    //-------------------------------------------------------------------------------//
+    optimal_rf_ = F_r;
 
     VectorNd Fr = optimal_solution.tail(12); // reaction forces
     // VectorNd tau_gen = VectorNd::Zero(18); // generalized torques
@@ -354,20 +339,20 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
     cout << Fr.transpose().format(f) << endl;
     // cout << "Jc' (floating base): " << endl;
     // cout << (Jc_.transpose()).topRows(6) << endl;
-    cout << "Jc': " << endl;
-    cout << (Jc_.transpose()) << endl;
-    cout << "Jc'*Fr: ---------" << endl;
-    cout << (Jc_.transpose()*F_r).transpose() << endl;
+    // cout << "Jc': " << endl;
+    // cout << (Jc_.transpose()) << endl;
+    // cout << "Jc'*Fr: ---------" << endl;
+    // cout << (Jc_.transpose()*F_r).transpose() << endl;
     cout << "b_g_: ---------" << endl;
-    std::cout << std::setprecision(8) << std::fixed;
+    std::cout << std::setprecision(4) << std::fixed;
     cout << b_g_.transpose() << endl; 
     
     cout << "q_ddot: -----------" << endl;
     cout << q_ddot.transpose() << endl;
-    cout << "M*q_ddot: ---------" << endl;
-    cout << (massMat_*q_ddot).transpose() << endl;
-    cout << "M: ---------" << endl;
-    cout << massMat_ << endl;
+    // cout << "M*q_ddot: ---------" << endl;
+    // cout << (massMat_*q_ddot).transpose() << endl;
+    // cout << "M: ---------" << endl;
+    // cout << massMat_ << endl;
 
     std::cout << std::setprecision(3) << std::fixed;
     //cout << "Reaction forces RBDL: \n " << pup_constraints_.force.transpose().format(f) << endl;
@@ -376,8 +361,7 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
     // //-------------------------------------------------------------------------------//
     // //-------------------------------------------------------------------------------//
     // Check constraints:
-    double mu = 1; 
-    
+    // double mu = 1; 
     // VectorNd Ax = (A*optimal_solution);
     // First leg x
     // cout << "Cone Constraint Test --------------------------------" << endl;
@@ -427,21 +411,21 @@ void PupperWBC::initConstraintSets_(){
     const Math::Vector3d world_z(0.0, 0.0, 1.0); 
 
     // Back left foot 
-    pup_constraints_.AddContactConstraint(back_left_lower_link_id_, body_contact_point_left_, world_x, "back_left_contact_x");
-    pup_constraints_.AddContactConstraint(back_left_lower_link_id_, body_contact_point_left_, world_y, "back_left_contact_y");
-    pup_constraints_.AddContactConstraint(back_left_lower_link_id_, body_contact_point_left_, world_z, "back_left_contact_z");
+    pup_constraints_.AddContactConstraint(back_left_lower_link_id_, body_contact_point_left, world_x, "back_left_contact_x");
+    pup_constraints_.AddContactConstraint(back_left_lower_link_id_, body_contact_point_left, world_y, "back_left_contact_y");
+    pup_constraints_.AddContactConstraint(back_left_lower_link_id_, body_contact_point_left, world_z, "back_left_contact_z");
     // Back right foot 
-    pup_constraints_.AddContactConstraint(back_right_lower_link_id_, body_contact_point_right_, world_x, "back_right_contact_x");
-    pup_constraints_.AddContactConstraint(back_right_lower_link_id_, body_contact_point_right_, world_y, "back_right_contact_y");
-    pup_constraints_.AddContactConstraint(back_right_lower_link_id_, body_contact_point_right_, world_z, "back_right_contact_z");
+    pup_constraints_.AddContactConstraint(back_right_lower_link_id_, body_contact_point_right, world_x, "back_right_contact_x");
+    pup_constraints_.AddContactConstraint(back_right_lower_link_id_, body_contact_point_right, world_y, "back_right_contact_y");
+    pup_constraints_.AddContactConstraint(back_right_lower_link_id_, body_contact_point_right, world_z, "back_right_contact_z");
     // Front left foot 
-    pup_constraints_.AddContactConstraint(front_left_lower_link_id_, body_contact_point_left_, world_x, "front_left_contact_x");
-    pup_constraints_.AddContactConstraint(front_left_lower_link_id_, body_contact_point_left_, world_y, "front_left_contact_y");
-    pup_constraints_.AddContactConstraint(front_left_lower_link_id_, body_contact_point_left_, world_z, "front_left_contact_z");
+    pup_constraints_.AddContactConstraint(front_left_lower_link_id_, body_contact_point_left, world_x, "front_left_contact_x");
+    pup_constraints_.AddContactConstraint(front_left_lower_link_id_, body_contact_point_left, world_y, "front_left_contact_y");
+    pup_constraints_.AddContactConstraint(front_left_lower_link_id_, body_contact_point_left, world_z, "front_left_contact_z");
     // Front right foot 
-    pup_constraints_.AddContactConstraint(front_right_lower_link_id_, body_contact_point_right_, world_x, "front_right_contact_x");
-    pup_constraints_.AddContactConstraint(front_right_lower_link_id_, body_contact_point_right_, world_y, "front_right_contact_y");
-    pup_constraints_.AddContactConstraint(front_right_lower_link_id_, body_contact_point_right_, world_z, "front_right_contact_z");
+    pup_constraints_.AddContactConstraint(front_right_lower_link_id_, body_contact_point_right, world_x, "front_right_contact_x");
+    pup_constraints_.AddContactConstraint(front_right_lower_link_id_, body_contact_point_right, world_y, "front_right_contact_y");
+    pup_constraints_.AddContactConstraint(front_right_lower_link_id_, body_contact_point_right, world_z, "front_right_contact_z");
 
     pup_constraints_.Bind(Pupper_);
 }
@@ -493,38 +477,43 @@ MatrixNd PupperWBC::getTaskJacobian_(unsigned priority){
     MatrixNd U = getTaskU_(priority);
 
     switch(T->type){
-    // Body Position Task
-    case BODY_POS:
-    {
-        MatrixNd Jb = getBodyJacobian_(T->body_id, T->offset);
-        Jt = U * Jb.bottomRows(3);
-        break;
-    }
+        // Reaction Force Task
+        case REACTION_FORCE:
+            //fall through to Body Position Task 
 
-    // Body Orientation Task
-    case BODY_ORI:
-    {
-        MatrixNd Jb = getBodyJacobian_(T->body_id, T->offset);
-        // In general we care about all 4 parts of a quaternion, so 
-        // U is identity in this case
-        Jt = U * Jb.topRows(3);
-        break;
-    }
-
-    // Joint position task
-    case JOINT_POS:
-        Jt = MatrixNd::Zero(ROBOT_NUM_JOINTS, NUM_JOINTS);
-
-        // For joint position Jacobians the value is either 1 or zero
-        for (int i = 0; i < T->active_targets.size(); i++){
-            Jt(i, i+6) = (T->active_targets[i] ? 1 : 0);
+        // Body Position Task
+        case BODY_POS:
+        {
+            MatrixNd Jb = getBodyJacobian_(T->body_id, T->offset);
+            Jt = U * Jb.bottomRows(3);
+            break;
         }
-        Jt = U * Jt;
-        break;
 
+        // Body Orientation Task
+        case BODY_ORI:
+        {
+            MatrixNd Jb = getBodyJacobian_(T->body_id, T->offset);
+            // In general we care about all 4 parts of a quaternion, so 
+            // U is identity in this case
+            Jt = U * Jb.topRows(3);
+            break;
+        }
 
-    default:
-        throw(std::runtime_error("Unrecognized WBC Task format"));
+        // Joint position task
+        case JOINT_POS:
+        {
+            Jt = MatrixNd::Zero(ROBOT_NUM_JOINTS, NUM_JOINTS);
+
+            // For joint position Jacobians the value is either 1 or zero
+            for (int i = 0; i < T->active_targets.size(); i++){
+                Jt(i, i+6) = (T->active_targets[i] ? 1 : 0);
+            }
+            Jt = U * Jt;
+            break;
+        }
+
+        default:
+            throw(std::runtime_error("Unrecognized WBC Task format"));
     }
 
     return Jt;
@@ -576,27 +565,52 @@ void PupperWBC::printDiag(){
         switch(T->type){
             // Note desired acceleration is -x_ddot_desired
             case BODY_ORI:
-                task_name = task_name + " ORI:";
+                task_name = "ORI: " + task_name;
                 break;
 
             case BODY_POS:
-                task_name = task_name + " POS:";
+                task_name = "POS: " + task_name;
                 break;
 
             case JOINT_POS:
-                task_name = task_name + " POS:";
+                task_name = "JOINT POS: " + task_name;
                 break;
 
+            case REACTION_FORCE:
+                task_name = "Reaction Forces: " + task_name;
+                break;
         }
-        // std::cout << std::setprecision(8) << std::fixed;
         cout << "###################################" << endl;
+        // std::cout << std::setprecision(8) << std::fixed;
         // cout << "Task Jacobian: \n" << j << endl;
         std::cout << std::setprecision(3) << std::fixed;
         cout << "Task " << task_name << endl;
         cout << "Weight: " << T->task_weight << endl;
-        cout << "Cost: " << T->task_weight*(j*optimal_qddot_ - T->x_ddot_desired).transpose()*(j*optimal_qddot_ - T->x_ddot_desired) << endl;
-        cout << "Accel. Optimal: " << (j*optimal_qddot_).transpose() << endl;
-        cout << "Accel. Desired: " << T->x_ddot_desired.transpose() << endl;
+
+        if (T->type != REACTION_FORCE){
+            cout << "Cost: " << T->task_weight*(j*optimal_qddot_ - T->x_ddot_desired).transpose()*(j*optimal_qddot_ - T->x_ddot_desired) << endl;
+            // cout << "OSQP Cost: " << T->task_weight*(0.5*optimal_qddot_.transpose()*j.transpose()*j*optimal_qddot_ - x_ddot_desired.transpose()*j*optimal_qddot_) << endl;
+            cout << "Accel. Optimal: " << (j*optimal_qddot_).transpose() << endl;
+            cout << "Accel. Desired: " << T->x_ddot_desired.transpose() << endl;
+        }
+        else{
+            // Diagnostics currently only compatible with tangential reaction force tracking tasks
+            int i_foot = feet_indices.at(T->body_id);
+            Vector2d optimal_rf_2d;
+            Vector2d rf_desired_2d;
+            optimal_rf_2d << optimal_rf_(i_foot*3), optimal_rf_(i_foot*3 + 1);
+            rf_desired_2d << rf_desired(i_foot*3), rf_desired(i_foot*3 + 1);
+            cout << "Cost: " << w_rf_xy*(optimal_rf_2d-rf_desired_2d).transpose()*(optimal_rf_2d-rf_desired_2d) << endl;
+            // cout << "OSQP Cost: " << w_rf_xy*(0.5*optimal_rf_2d.transpose()*optimal_rf_2d - rf_desired_2d.transpose()*optimal_rf_2d) << endl;
+            cout << "Rf. Optimal: " << optimal_rf_2d.transpose() << endl;
+            cout << "Rf. Desired: " << rf_desired_2d.transpose() << endl;
+            cout << endl;
+            cout << "Pos target: " << T->pos_target.transpose() << endl;
+            cout << "Pos measured: " << T->pos_measured.transpose() << endl;
+            cout << "Vel target: " << T->dpos_target.transpose() << endl;
+            cout << "Vel measured: " << taskDerivative_(T).transpose() << endl;
+        }
+        
     }
 }
 
@@ -611,18 +625,8 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     //       0 , P_b];              [ (12x18) ,  12x12  ]
     //
     // A is sparse block matrix
-    // A = [ M  , -Jc'  ;   Sizes: [  18x18 , 18x12 ]
-    //       0  , A_fr ];          [ (20x18), 20x12 ]
-
-    
-
-    // Parameters
-    double lambda_q = 0.001; // Penalizes high joint accelerations (q_ddot^2)
-    VectorNd rf_desired = VectorNd::Zero(12);// Desired reaction forces
-    double lambda_rf_z = 0; // 1 Normal reaction force penalty (minimize impacts)
-    double lambda_rf_xy = 0; // 10 Tangential reaction force penalty (minimize slipping - prevent lateral force contribution to ori task)
-    double w_rf = 0; //1  Reaction force tracking penalty (follow desired reaction force)
-    double mu = .3; // Coefficient of friction 
+    // A = [ M  , -Jc'  ;    Sizes: [  18x18 , 18x12 ]
+    //       0  , A_fr ];           [ (20x18), 20x12 ]
 
     // ---------------------------------------------------------------
     // ------------------------- OBJECTIVE ---------------------------
@@ -655,7 +659,7 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
         // MatrixNd j_dot_q_dot = j_dot * joint_velocities_;
         //--------------------------------------------------
 
-        VectorNd x_ddot_desired = VectorNd::Zero(j.rows());
+        VectorNd x_ddot_desired = VectorNd::Zero(T->active_targets.size());
 
         switch(T->type){
             // Note desired acceleration is -x_ddot_desired
@@ -668,14 +672,31 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
                 break;
 
             case JOINT_POS:
+            {
                 Eigen::Matrix<double, 12, 1> Kp_rep, Kd_rep;
                 // Kp and Kd are repeated for all 4 legs
                 Kp_rep << T->Kp, T->Kp, T->Kp, T->Kp;
                 Kd_rep << T->Kd, T->Kd, T->Kd, T->Kd;
                 x_ddot_desired = Kp_rep.cwiseProduct(T->joint_measured - T->joint_target) + Kd_rep.cwiseProduct(taskDerivative_(T) - T->djoint_target);
                 break;
+            }
+            case REACTION_FORCE:
+                int i_foot = feet_indices.at(T->body_id);
+                cout << "i_foot" << i_foot << endl;
+                cout << "body id: " << T->body_id << endl;
+                // Reaction force is opposite of the desired direction
+                Eigen::Vector3d rf_desired_3d = T->Kp.cwiseProduct((T->pos_measured - T->pos_target)) + T->Kd.cwiseProduct(taskDerivative_(T) - T->dpos_target);
+                for (int j = 0; j < 3; j++)
+                {
+                    rf_desired(i_foot*3 + j) = rf_desired_3d(j);
+                    cout << "rf_desired(" << i_foot*3 + j << "): " << rf_desired(i_foot + j) << endl;
+                }
+                // For logging
+                T->rf_desired = rf_desired;
+                cout << "rf_desired full: " << rf_desired.transpose() << endl;
+                cout << "rf_redired leg " << T->body_id << ": " << rf_desired_3d.transpose() << endl;
+                break;
         }
-        
         // Remove inactive rows
         x_ddot_desired = U_active * x_ddot_desired;
 
@@ -718,14 +739,14 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
         cost_t_mat += T->task_weight * j.transpose() * j; // nq x nq
 
         //----------------- WITH j_dot_q_dot ----------------
-        //cost_t_vec += T->task_weight * j.transpose() * (j_dot_q_dot + x_ddot_desired); // nq x 1 
+        //cost_t_vec += T->task_weight * j.transpose() * (j_dot_q_dot + x_ddot_desired); // nq x 1 // Double check this for correctness
 
         //----------------- WITHOUT j_dot_q_dot -------------
         cost_t_vec += T->task_weight * j.transpose() * x_ddot_desired; // nq x 1
         //---------------------------------------------------
 
-    }
 
+    }
     // Add a cost to penalize high joint accelerations
     for (int i = 6; i < NUM_JOINTS; i++){
         cost_t_mat(i,i) += lambda_q;
@@ -744,16 +765,18 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
 
     // Penalize large lateral and normal reaction forces (lambda_rf), and penalize tracking error (w_rf)
     // These elements go into the diagonal of the cost matrix
-    diag_terms << lambda_rf_xy + w_rf, lambda_rf_xy + w_rf, lambda_rf_z +  w_rf, 
-                  lambda_rf_xy + w_rf, lambda_rf_xy + w_rf, lambda_rf_z +  w_rf,
-                  lambda_rf_xy + w_rf, lambda_rf_xy + w_rf, lambda_rf_z +  w_rf,
-                  lambda_rf_xy + w_rf, lambda_rf_xy + w_rf, lambda_rf_z +  w_rf;
+    diag_terms << lambda_rf_xy + w_rf_xy, lambda_rf_xy + w_rf_xy, lambda_rf_z +  w_rf_z, 
+                  lambda_rf_xy + w_rf_xy, lambda_rf_xy + w_rf_xy, lambda_rf_z +  w_rf_z,
+                  lambda_rf_xy + w_rf_xy, lambda_rf_xy + w_rf_xy, lambda_rf_z +  w_rf_z,
+                  lambda_rf_xy + w_rf_xy, lambda_rf_xy + w_rf_xy, lambda_rf_z +  w_rf_z;
 
     cost_rf_mat = diag_terms.asDiagonal();
 
     // Penalizes tracking error
-    cost_rf_vec =  w_rf * -rf_desired; // rf_desired is 12x1 vector
-    
+    cost_rf_vec <<  w_rf_xy * -rf_desired(0), w_rf_xy * -rf_desired(1), w_rf_z * -rf_desired(2),
+                    w_rf_xy * -rf_desired(3), w_rf_xy * -rf_desired(4), w_rf_z * -rf_desired(5),
+                    w_rf_xy * -rf_desired(6), w_rf_xy * -rf_desired(7), w_rf_z * -rf_desired(8),
+                    w_rf_xy * -rf_desired(9), w_rf_xy * -rf_desired(10), w_rf_z * -rf_desired(11);
     // Form P matrix and q vector
     P.topLeftCorner(NUM_JOINTS,NUM_JOINTS) = cost_t_mat;
     P.bottomRightCorner(12,12)             = cost_rf_mat;
@@ -801,7 +824,7 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     // 0 <= Fr_z <= rf_z_max     (l = u = 0 for feet commanded to swing or floating)
 
     double rf_z_max = 100; // Max normal reaction force
-    double rf_z_min = 0; // Min normal reaction force
+    double rf_z_min = 0.1; // Min normal reaction force
     MatrixNd reaction_force_mat = MatrixNd::Zero(20, NUM_JOINTS + 12); // Block matrix to store inequality matrix 20x30
     MatrixNd A_fr = MatrixNd::Zero(20,12); // Inequality matrix for reaction forces (12 for Fr_z, 8 for Fr_x/Fr_z)
     VectorNd reaction_force_lower_limit = VectorNd::Zero(20); // Min reaction force (zero for normal reaction forces)
@@ -936,8 +959,8 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     // cout<< "u vector bottom 12: \n" << u.tail(12).format(f) << endl << endl;
 
     // cout << "massMat: \n" << massMat_.topRows(6).format(f) << endl;
-    std::cout << std::setprecision(8) << std::fixed;
-    cout << "Jc_'.topRows(6): \n" << (Jc_).transpose().topRows(6).format(f) << endl;
+    // std::cout << std::setprecision(8) << std::fixed;
+    // cout << "Jc_'.topRows(6): \n" << (Jc_).transpose().topRows(6).format(f) << endl;
     // cout << "combined: \n" << eq_mat_0.format(f) << endl;
 }
 
@@ -1043,76 +1066,4 @@ void PupperWBC::convertEigenToCSC_(const MatrixNd &P, vector<c_float> &P_x, vect
 double PupperWBC::now(){
     // returns time in seconds 
     return time_now_; // in s
-}
-
-double PupperWBC::calcRobotHeight_(){
-    // Calculates the height of the pupper using contacts, joint angles, and orientation 
-    // Note: feet_in_contact_, joint_angles_ and orientation should be updated before this. 
-    // The orientation is implicitly used in the CalcBodyToBaseCoordinates.
-
-    Vector3d r_bl = Vector3d::Zero(3);
-    Vector3d r_br = Vector3d::Zero(3);
-    Vector3d r_fl = Vector3d::Zero(3);
-    Vector3d r_fr = Vector3d::Zero(3);
-
-    double num_contacts = 0;
-    double sum_z = 0;
-    double height; // height from floor to COM base
-    if (feet_in_contact_[0]){
-        r_bl = CalcBodyToBaseCoordinates(Pupper_, joint_angles_, Pupper_.GetBodyId("back_left_lower_link"), body_contact_point_left_, true);
-        num_contacts += 1;
-        sum_z += -r_bl(2);
-    }
-    if (feet_in_contact_[1]){
-        r_br = CalcBodyToBaseCoordinates(Pupper_, joint_angles_, Pupper_.GetBodyId("back_right_lower_link"), body_contact_point_right_, true);
-        num_contacts += 1;
-        sum_z += -r_br(2);
-    }
-    if (feet_in_contact_[2]){
-        r_fl = CalcBodyToBaseCoordinates(Pupper_, joint_angles_, Pupper_.GetBodyId("front_left_lower_link"), body_contact_point_left_, true);
-        num_contacts += 1;
-        sum_z += -r_fl(2);
-    }
-    if (feet_in_contact_[3]){
-        r_fr = CalcBodyToBaseCoordinates(Pupper_, joint_angles_, Pupper_.GetBodyId("front_right_lower_link"), body_contact_point_right_, true);
-        num_contacts += 1;
-        sum_z += -r_fr(2);
-    }
-
-    height = sum_z/num_contacts;
-    
-    // Since the base frame is aligned with the prismatic floating joints (which are aligned with world frame), the z axis should be the height. 
-    // However, I'm keeping the code below just in case.
-    // Below, we rotate the vectors to the world frame and extract the z component. 
-    // Retrieve Orientation of pupper base
-    Eigen::Matrix3d Rsb = robot_orientation_.toMatrix(); // Rotation matrix from world to PCB orientation 
-
-    Eigen::Vector3d s_bl = Rsb * r_bl;
-    Eigen::Vector3d s_br = Rsb * r_br;
-    Eigen::Vector3d s_fl = Rsb * r_fl;
-    Eigen::Vector3d s_fr = Rsb * r_fr;
-
-    double s_height = -(s_bl(2) + s_br(2) + s_fl(2) + s_fr(2) ) / num_contacts;
-    // cout << "------------height calculation ---------------" << endl;
-    // cout << "Back left contact point in base coord: \n" << r_bl.transpose().format(f) << endl;
-    // cout << "Back right contact point in base coord: \n" << r_br.transpose().format(f) << endl;
-    // cout << "Front left contact point in base coord: \n" << r_fl.transpose().format(f) << endl;
-    // cout << "Front right contact point in base coord: \n" << r_fr.transpose().format(f) << endl;
-    // cout << "robot joint angles: " << joint_angles_.format(f) << endl;
-    // cout << "robot_orientation: " << endl << robot_orientation_ << endl;
-    // cout << "Rsb: \n" << Rsb.format(f) << endl;
-    // cout << "bl rotated: \n" << s_bl.transpose().format(f) << endl;
-    // cout << "br rotated: \n" << s_br.transpose().format(f) << endl;
-    // cout << "fl rotated: \n" << s_fl.transpose().format(f) << endl;
-    // cout << "fr rotated: \n" << s_fr.transpose().format(f) << endl;
-
-    // cout << "height assuming base frame is not aligned with world (this should be wrong): " << s_height << endl;
-    // cout << "height (this should be right): " << height << endl;
-    // cout << "---------------------------- ----------------" << endl;
-    if (num_contacts > 0){
-        return height;
-    }
-    else{
-        return robot_height_;
-    }
 }

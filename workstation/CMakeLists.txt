@@ -58,6 +58,7 @@ add_library(${PROJECT_NAME}
   src/PupperCplusplusController/PupperModel.cpp
   src/PupperCplusplusController/PupperWBC.cpp
   src/PupperCplusplusController/WBCTaskMaster.cpp
+  src/PupperCplusplusController/StateEstimation.cpp
 )
 
 # Link all necessary libraries to our library
@@ -79,7 +80,8 @@ include_directories(
   ${catkin_INCLUDE_DIRS}/eigen3
 )
 
-# Create an executable file and link its dependencies
+# Create executable files and link their dependencies
+# PupperController used for debugging the WBC
 add_executable(PupperController 
   src/PupperCplusplusController/PupperControl.cpp
 )

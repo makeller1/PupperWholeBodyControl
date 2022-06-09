@@ -5,11 +5,13 @@
 #include <string>
 #include <array>
 #include "Eigen/Dense"
+#include <unordered_map>
 
 enum TaskType{
     BODY_POS,
     BODY_ORI,
-    JOINT_POS
+    JOINT_POS,
+    REACTION_FORCE
 };
 
 // Note: for embeddded use, we want to avoid dynamically sized vectors/matrices, but we're stuck for now since RBDL templates require dynamic matrices.
@@ -41,7 +43,7 @@ struct Task{
     Eigen::Vector3d pos_measured;
     Eigen::Vector3d last_pos_measured;
     Eigen::Vector3d dpos_target;
-    Eigen::Vector3d dpos_measured; // body velocity
+    Eigen::VectorXd dpos_measured; // body velocity - not currently in use
     Eigen::Vector3d x_ddot_ff; // feedforward acceleration - zero initialized
 
     // Coefficients for the PD error term 
@@ -54,6 +56,7 @@ struct Task{
 
     // For diagnostics
     Eigen::VectorXd x_ddot_desired; // Desired task accelerations
+    Eigen::VectorXd rf_desired; // Desired task reaction force
 };
 
 #endif

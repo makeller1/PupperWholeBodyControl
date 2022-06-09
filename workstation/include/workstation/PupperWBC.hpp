@@ -29,7 +29,6 @@ public:
     // Take in the current robot data
     void updateController(const VectorNd& joint_angles, 
                           const VectorNd& joint_velocities,
-                          const Eigen::Vector3d& body_position,
                           const Eigen::Quaterniond& body_quaternion,
                           const std::array<bool, 4>& feet_in_contact,
                           const double time_s);
@@ -49,9 +48,6 @@ public:
     // Getter for the robot joint angles
     VectorNd getJointPositions();
 
-    // Get the calculated height (m from ground to origin of bottom pcb)
-    double getCalculatedHeight();
-
     // Load the Pupper model from a URDF
     void Load(std::string filename);
     void Load(RigidBodyDynamics::Model& model);
@@ -61,8 +57,21 @@ public:
     // Get the desired joint (motor) accelerations fulfilling the current tasks
     std::array<float, 12> getOptimalAccel();
 
+    // Location of center of foot in lower link coordinates (center of hemisphere face)
+    const RigidBodyDynamics::Math::Vector3d body_contact_point_left =  RigidBodyDynamics::Math::Vector3d(0.0, -.11, 0.0095);
+    const RigidBodyDynamics::Math::Vector3d body_contact_point_right = RigidBodyDynamics::Math::Vector3d(0.0, -.11, -0.0095);
+
     // For tuning and debugging
     void printDiag();
+
+    // WBC parameters
+    double lambda_q; // Penalizes high joint accelerations (q_ddot^2)
+    VectorNd rf_desired = VectorNd::Zero(12); // Desired reaction forces
+    double lambda_rf_z; // Normal reaction force penalty (minimize impacts)
+    double lambda_rf_xy; // Tangential reaction force penalty (minimize slipping - prevent lateral force contribution to ori task)
+    double w_rf_xy; // Tangential reaction force tracking penalty (follow desired reaction force)
+    double w_rf_z; // Normal reaction force tracking penalty (follow desired reaction force)
+    double mu; // Coefficient of friction 
 
 private:
     // The Pupper model for RBDL
@@ -89,9 +98,6 @@ private:
     // Retrieve the contact Jacobian for the active contacts
     void updateContactJacobian_(bool update_kinematics = true);
 
-    // Calculate robot height using forward kinematics
-    double calcRobotHeight_();
-
     // Store the robot state
     // Note: base is the coordinate frame fixed to the center of bottom PCB and oriented with global frame
     VectorNd joint_angles_;     // joint angles in rad. Describes 12 motors plus floating base of 3 xyz and 4 quaternion, ...
@@ -99,8 +105,6 @@ private:
                                 //        where t is translation of the base, quat is quaternion orientation of the base
     VectorNd joint_velocities_; // joint velocities in rad/s. Describes 12 motors plus floating base of xyz_dot and 3 angular velocities 
                                 // ORDER: v_x, v_y, v_z, w_x, w_y, w_z, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12
-    VectorNd robot_position_;    // robot base position in meters  
-    double robot_height_;        // distance from floor to robot base in base coordinates in m
     VectorNd robot_velocity_;    // robot base velocity in m/s
     Quat   robot_orientation_;   // robot orientation from IMU (Quaternion)
     Matrix Jc_;                  // contact Jacobian. Jc_.transpose() maps reaction forces to forces/torques on the joints (including floating joint).
@@ -121,11 +125,7 @@ private:
 
     // Map of robot tasks organized by name
     std::vector<Task*> robot_tasks_;
-    std::unordered_map<std::string, unsigned> task_indices_;
-
-    // Location of center of foot in lower link coordinates (center of hemisphere face)
-    const RigidBodyDynamics::Math::Vector3d body_contact_point_left_ =  RigidBodyDynamics::Math::Vector3d(0.0, -.11, 0.0095);
-    const RigidBodyDynamics::Math::Vector3d body_contact_point_right_ = RigidBodyDynamics::Math::Vector3d(0.0, -.11, -0.0095);
+    std::unordered_map<std::string, unsigned int> task_indices_;
 
     // OSQP Solver
     std::unique_ptr<OSQPSettings> QP_settings_;
@@ -141,8 +141,16 @@ private:
     double time_now_; // s current time
     double t_prev_; // s time at previous update
 
+    // Map feet body names to indices
+    const std::unordered_map<std::string, unsigned int> feet_indices = {{"back_left_foot",0},
+                                                                        {"back_right_foot",1},
+                                                                        {"front_left_foot",2},
+                                                                        {"front_right_foot",3}};
+
+
     // For tuning and debugging
     VectorNd optimal_qddot_; // Optimal generalized accelerations
+    VectorNd optimal_rf_; // Optimal reaction forces
 };
 
 #endif

@@ -17,7 +17,7 @@ Note the WBC uses the order
     "front_right_shoulder": 10,
     "front_right_elbow":    11
 
-The teensy uses the order
+The embedded code uses the order
     [FR hip, FR shoulder, FR knee,
      FL hip, FL shoulder, FL knee,
      BR hip, BR shoulder, BR knee,
@@ -36,7 +36,7 @@ class whisperer:
         # pref : reference pos 12x1 (array)
         # lcur : last command 12x1 (array)
         # quat : robot orientation wxyz (array)
-        self.robot_states_ = {'pos': [0] * 12, 'vel': [0] * 12, 'cur': [0] * 12, 'quat' : [1,0,0,0]}
+        self.robot_states_ = {'pos': [0.0] * 12, 'vel': [0.0] * 12, 'cur': [0.0] * 12, 'quat' : [1.0,0,0,0]}
 
         # The zero position map is the joint position offset when the pupper is zeroed 
         # laying down with elbows back.                     
@@ -79,12 +79,11 @@ class whisperer:
                             "front_right_shoulder":  -1, # -
                             "front_right_elbow":      1  # +
                             }
-        self.commands_reordered = [0] * 12
 
     def get_joint_state(self, joint_name):
         i = self.joint_name_map[joint_name]
         sign = self.joint_sign_map[joint_name]
-        zero_offset = self.zero_pos_map[joint_name] # We currently implement the zero-offset on the workstation
+        zero_offset = self.zero_pos_map[joint_name] # Currently implement the zero-offset in python
         joint_pos = self.robot_states_['pos'][i] * sign + zero_offset
         joint_vel = self.robot_states_['vel'][i] * sign
         joint_cur = self.robot_states_['cur'][i] * sign
@@ -106,8 +105,9 @@ class whisperer:
 
     def reorder_commands(self, commands):
         i = 0
+        commands_reordered = [commands[0]]*12 # initialize list using data type from commands
         for name, index in self.joint_name_map.items():
-            self.commands_reordered[index] = commands[i] * self.joint_sign_map[name]
+            commands_reordered[index] = commands[i] * self.joint_sign_map[name]
             i = i + 1
             #Debugging:
             # print("NAME: ", name)
@@ -115,7 +115,7 @@ class whisperer:
             # print("VALUE: ", torque_commands[i])
             # sign = self.joint_sign_map[name]
             # print("SIGN: ", sign)
-        return self.commands_reordered
+        return commands_reordered
 
     def check_errors(self):
         if "err" in self.robot_states_:
@@ -130,9 +130,10 @@ class whisperer:
         #                    0 : pos
         #                    1 : vel
         # --------------------- Position states  ---------------------------
-        print("front right hip : {:+.3f}".format(self.get_joint_state("front_right_hip")[state_idx]), "  "
-                "front right shoulder : {:+.3f}".format(self.get_joint_state("front_right_shoulder")[state_idx]), "  "
-                "front right elbow : {:+.3f}".format(self.get_joint_state("front_right_elbow")[state_idx]))
+        if state_idx == 0:
+            print("-------------- Position --------------")
+        elif state_idx == 1:
+            print("-------------- Velocity --------------")
 
         print("back left hip   : {:+.3f}".format(self.get_joint_state("back_left_hip")[state_idx]), "  "
                 "back left shoulder : {:+.3f}".format(self.get_joint_state("back_left_shoulder")[state_idx]), "  "
@@ -145,3 +146,8 @@ class whisperer:
         print("front left hip  : {:+.3f}".format(self.get_joint_state("front_left_hip")[state_idx]), "  "
                 "front left shoulder : {:+.3f}".format(self.get_joint_state("front_left_shoulder")[state_idx]), "  "
                 "front left elbow : {:+.3f}".format(self.get_joint_state("front_left_elbow")[state_idx]))
+
+        print("front right hip : {:+.3f}".format(self.get_joint_state("front_right_hip")[state_idx]), "  "
+                "front right shoulder : {:+.3f}".format(self.get_joint_state("front_right_shoulder")[state_idx]), "  "
+                "front right elbow : {:+.3f}".format(self.get_joint_state("front_right_elbow")[state_idx]))
+        print("\n")

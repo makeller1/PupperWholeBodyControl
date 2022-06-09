@@ -43,7 +43,7 @@ public:
     // Debug function
     void setJointPositions(std::vector<float> angles);
 
-    std::array<bool, 4> feet_in_contact_manual; // Prescribed feet in contact Order: BL, BR, FL, FR
+    std::array<bool, 4> feet_in_contact_manual; // Prescribed feet in contact order: BL, BR, FL, FR
 private:
     // Model
     physics::ModelPtr model_;                    // Pointer to the model in Gazebo

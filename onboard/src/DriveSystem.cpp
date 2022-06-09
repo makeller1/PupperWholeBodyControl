@@ -9,13 +9,13 @@ DriveSystem::DriveSystem() : front_bus_(), rear_bus_()
 {
   control_mode_ = DriveControlMode::kIdle; //kIdle;
   fault_current_ = 10.0; // Violation sets control mode to kError
-  fault_position_array_[0] = PI/4; // PI/4 // hip fault_position
-  fault_position_array_[1] = 5.0; // 5.0 shoulder fault_position
-  fault_position_array_[2] = 5.0; // 5.0 elbow fault_position
+  fault_position_array_[0] = PI/4; // hip fault_position
+  fault_position_array_[1] = 5.0;  // shoulder fault_position
+  fault_position_array_[2] = 5.0;  // elbow fault_position
 
   // Default values
   torques_ = {0,0,0,0,0,0,0,0,0,0,0,0};
-  fault_velocity_ = 30.0;  // TODO: Determine if this is reasonable
+  fault_velocity_ = 35.0;  // TODO: Determine if this is reasonable
   max_current_ = 3.0; // Saturates current command
   viol_vel_mask_.fill(false);
   viol_pos_mask_.fill(false);
@@ -25,10 +25,10 @@ DriveSystem::DriveSystem() : front_bus_(), rear_bus_()
   q1_ = 0;
   q2_ = 0;
   q3_ = 0;
-
+  
+  //  Currently implement the zero-offset in python
   //                              FR0, FR1, FR2                   FL0, FL1, FL2                  BR0,BR1,BR2                    BL0,BL1,BL2     
   //zero_position_offset_ = {.06539, 1.19682, 2.71176,  -.06539, -1.19682, -2.71176,   .06539, 1.19682, 2.71176,    -.06539, -1.19682, -2.71176}; // used to zero pupper laying down
-  // zero_position_offset_ = {.1,.2,.3,.4,.5,.6,.7,.8,.9,.10,.11,.12}; // Testing to see mapping
 
   zero_position_.fill(0.0);
 
@@ -179,7 +179,7 @@ void DriveSystem::CommandBraking()
 {
   // Regulate joint velocity to prevent destructive joint positions or velocities
   const float Kd_viol = 1.2;
-  const float Kd_safe = 0.3;
+  const float Kd_safe = 0.8;
   ActuatorCurrentVector currents;
   currents.fill(0.0);
   for (size_t i=0; i < kNumActuators; i++)
