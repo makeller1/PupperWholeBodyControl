@@ -158,7 +158,7 @@ void TaskMaster::setGoal(GoalName goal, PupperWBC& WBC_, std::array<bool,4>& fee
             // Manually prescribe which feet are in contact (BL,BR,FL,FR)
             feet_in_contact = {true,true,true,true};
 
-            // Task for Body center of mass to be 10cm high // range .02
+            // Task for Body center of mass to be 8 cm high
             static Task CoM_Position_Task;
             CoM_Position_Task.type    = BODY_POS;
             CoM_Position_Task.body_id = "bottom_PCB";
@@ -169,7 +169,7 @@ void TaskMaster::setGoal(GoalName goal, PupperWBC& WBC_, std::array<bool,4>& fee
             CoM_Position_Task.Kd << 5,5,10;
             CoM_Position_Task.x_ddot_ff << 0, 0, 0;
 
-            // Task for Body center of mass to be flat // .001
+            // Task for Body center of mass to be flat
             static Task CoM_Orientation_Task;
             CoM_Orientation_Task.type    = BODY_ORI;
             CoM_Orientation_Task.body_id = "bottom_PCB";
@@ -185,14 +185,14 @@ void TaskMaster::setGoal(GoalName goal, PupperWBC& WBC_, std::array<bool,4>& fee
             static Task JointPositionTask; 
             JointPositionTask.type = JOINT_POS;
             JointPositionTask.body_id = "joint";
-            JointPositionTask.task_weight = 0; // 1
+            JointPositionTask.task_weight = 1;
             JointPositionTask.joint_target <<   0.0,  M_PI_4,  M_PI_2, 
                                                 0.0, -M_PI_4, -M_PI_2,
                                                 0.0,  M_PI_4,  M_PI_2,
                                                 0.0, -M_PI_4, -M_PI_2;
             JointPositionTask.active_targets = {true, false, false, true, false, false, true, false, false, true, false, false};
-            JointPositionTask.Kp << 100,0,0; //600 : The three gains are applied to each leg
-            JointPositionTask.Kd << 10,0,0; //25 : When tuning remember: tau = M*q_ddot + ... and q_dotdot = Kp (theta-theta_d) + Kd(omega)
+            JointPositionTask.Kp << 100,0,0; // The three gains are applied to each leg 
+            JointPositionTask.Kd << 10,0,0; // When tuning remember: tau = M*q_ddot + ... and q_dotdot = Kp (theta-theta_d) + Kd(omega) 
 
             Eigen::Vector3d foot_pos_Kp = {0, 0, 0}; // zeros indicate desired acceleration = zero 
             Eigen::Vector3d foot_pos_Kd = {0, 0, 0};   // zeros indicate desired acceleration = zero 

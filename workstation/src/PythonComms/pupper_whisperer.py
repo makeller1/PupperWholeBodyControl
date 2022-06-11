@@ -119,7 +119,7 @@ class whisperer:
 
     def check_errors(self):
         if "err" in self.robot_states_:
-            print("Pupper in kError mode (fault limits violated)")
+            print("Fault limits violated. Pos faulted by motors: ", self.robot_states_['err'])
             return True
         else:
             return False

@@ -51,6 +51,9 @@ class DriveSystem {
 
   // Indicates which motors violate fault_position_
   ActuatorActivations viol_pos_mask_;
+  
+  // Indicates which motor first violated fault_position_
+  ActuatorActivations viol_pos_mask_first_;
 
   // Maximum current for current control and PD mode.
   float max_current_;
@@ -62,8 +65,10 @@ class DriveSystem {
   // Max velocity before system errors out.
   float fault_velocity_;
 
-  // fault_positions for each joint (hip, shoulder, elbow, for all legs) - mathew
-  float fault_position_array_[3];
+  // fault_position highs for each joint (hip, shoulder, elbow, for all legs) - mathew
+  float fault_position_array_high_[3];
+  // fault_position lows for each joint (hip, shoulder, elbow, for all legs) - mathew
+  float fault_position_array_low_[3];
 
   // Important direction multipliers
   std::array<float, 12> direction_multipliers_; /* */

@@ -333,28 +333,30 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
     // cout << optimal_solution.head(18).transpose().format(f) << endl;
     //cout << "Qdotdot RBDL: \n" << QDDOT.transpose().format(f) << endl;
     // cout << " --------------------------------------" << endl;
+    std::cout << std::setprecision(3) << std::fixed;
     cout << "Commanded Torques: -----------------" << endl;
     cout << tau.transpose() << endl;
     cout << "Reaction Forces OSQP: -----------------" << endl;
     cout << Fr.transpose().format(f) << endl;
+
     // cout << "Jc' (floating base): " << endl;
     // cout << (Jc_.transpose()).topRows(6) << endl;
     // cout << "Jc': " << endl;
     // cout << (Jc_.transpose()) << endl;
     // cout << "Jc'*Fr: ---------" << endl;
     // cout << (Jc_.transpose()*F_r).transpose() << endl;
-    cout << "b_g_: ---------" << endl;
-    std::cout << std::setprecision(4) << std::fixed;
-    cout << b_g_.transpose() << endl; 
+    // cout << "b_g_: ---------" << endl;
+    // std::cout << std::setprecision(4) << std::fixed;
+    // cout << b_g_.transpose() << endl; 
     
-    cout << "q_ddot: -----------" << endl;
-    cout << q_ddot.transpose() << endl;
+    // cout << "q_ddot: -----------" << endl;
+    // cout << q_ddot.transpose() << endl;
     // cout << "M*q_ddot: ---------" << endl;
     // cout << (massMat_*q_ddot).transpose() << endl;
     // cout << "M: ---------" << endl;
     // cout << massMat_ << endl;
 
-    std::cout << std::setprecision(3) << std::fixed;
+    // std::cout << std::setprecision(3) << std::fixed;
     //cout << "Reaction forces RBDL: \n " << pup_constraints_.force.transpose().format(f) << endl;
     //cout << " --------------------------------------" << endl;
 
@@ -802,7 +804,7 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     // For the floating base joints we have         0 <= tau <= 0       
     // For the rest of the joints we have    -tau_lim <= tau <= +tau_lim
 
-    const double torque_limit = 10; // Temporary value, this is a very high value for our small motors
+    const double torque_limit = 4; // 7 Nm is stall torque
     VectorNd torque_lower_limit = VectorNd::Zero(NUM_JOINTS);
     VectorNd torque_upper_limit = VectorNd::Zero(NUM_JOINTS);
     torque_lower_limit.head(6) = -b_g_.head(6);
@@ -824,7 +826,7 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     // 0 <= Fr_z <= rf_z_max     (l = u = 0 for feet commanded to swing or floating)
 
     double rf_z_max = 100; // Max normal reaction force
-    double rf_z_min = 0.1; // Min normal reaction force
+    double rf_z_min = 0.5; // Min normal reaction force
     MatrixNd reaction_force_mat = MatrixNd::Zero(20, NUM_JOINTS + 12); // Block matrix to store inequality matrix 20x30
     MatrixNd A_fr = MatrixNd::Zero(20,12); // Inequality matrix for reaction forces (12 for Fr_z, 8 for Fr_x/Fr_z)
     VectorNd reaction_force_lower_limit = VectorNd::Zero(20); // Min reaction force (zero for normal reaction forces)
@@ -928,11 +930,11 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     }
 
     //Debug: print contacts in order (BL, BR, FL, FR)
-    cout << "Feet contacts : {";
-    for (bool b : feet_in_contact_){
-        cout << b << ", ";
-    }
-    cout << "}" << endl;
+    // cout << "Feet contacts : {";
+    // for (bool b : feet_in_contact_){
+    //     cout << b << ", ";
+    // }
+    // cout << "}" << endl;
 
     reaction_force_mat.rightCols(12) = A_fr;
 
@@ -999,8 +1001,8 @@ VectorNd PupperWBC::solveQP(int n, int m, MatrixNd &P, c_float  *q, MatrixNd &A,
         settings->eps_prim_inf = 1e-2; // Primal infeasibility tolerance
         settings->eps_dual_inf = 1e-2; // Dual infeasibility tolerance
         // settings->polish = 1; // For high quality solution
-        settings->verbose = 1;   // Print information? 
-        // settings->scaling = 20; // Number of scaling iterations - could speed up solver and avoid failures
+        settings->verbose = 0;   // Print information? 
+        settings->scaling = 75; // Number of scaling iterations - could speed up solver and avoid failures (20)
     }
 
     // Setup workspace
@@ -1014,7 +1016,7 @@ VectorNd PupperWBC::solveQP(int n, int m, MatrixNd &P, c_float  *q, MatrixNd &A,
         throw(std::runtime_error(message));
         // TODO: Engage motor braking
     }
-    if (work->info->status_val != 1 && work->info->status_val != 2){
+    if (work->info->status_val != 1 && work->info->status_val != 2 && work->info->status_val != -2){
         string message = "OSQP Solve failed with code: " + std::to_string(work->info->status_val);
         throw(std::runtime_error(message));
         // TODO: Engage motor braking

@@ -35,19 +35,16 @@ def main():
     # maintain communication frequency 
     dt = .001 # 1000hz
     now = time.time()
-    i = 0
+    
     try:
-        while i < 86928+1001: # Number of samples required for calibration
+        while True:
             if time.time() - now >= dt:
 
                 hardware_interface.run_calibration()
-
                 now = time.time()
 
                 # Check if the pupper has faulted
                 PupComm.check_errors()
-
-                i = i + 1
                 
     except KeyboardInterrupt:
         hardware_interface.set_torque([0]*12) # Zero torques when quit

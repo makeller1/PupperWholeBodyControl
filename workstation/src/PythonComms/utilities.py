@@ -16,6 +16,7 @@ Steps for accurate torque control
 
 Note: The desired velocity is required for compensating static friction in the correct direction. We can use the desired
       acceleration q_dot_dot from the WBC solution to determine the direction of desired velocity at rest.
+      The static friction compensation may do more harm than good by creating instabilities due to switching.
 '''
 
 import numpy as np
@@ -24,7 +25,7 @@ def trq_to_current(trq_desired,q_ddot_des,joint_vel):
     # Identified motor parameters
     Kt_pos = .1834 # Torque constant forward driving (Nm/A)
     Kt_neg = .3030 # Torque constant backdriving (Nm/A)
-    i_s = 0.26 # Static friction current compensation (A) 
+    i_s = 0.26 # 0.26 Static friction current compensation (A) 
     i_damping = .04 # Amount current is reduced for stability (A)
                     # (currently set to std(i_k) or 1 std dev of compensation current) 
 
@@ -50,15 +51,6 @@ def trq_to_current(trq_desired,q_ddot_des,joint_vel):
         # Compensate static friction
         # Discontinuous
         i_c = i_s * np.sign(q_ddot_des) #Compensation current
-
-        # #Continuous (experimental)
-        # x0 = 0
-        # x1 = .2
-        # y0 = .287
-        # y1 = .12788
-        # m0 = (y1-y0)/(x1-x0)
-        # b = y0
-        # i_s = (m0*joint_vel + b) * np.sign(q_ddot_des)
     else:
         # Compensate kinetic friction
         i_c = kin_friction(joint_vel, i_damping, drive_mode) #Compensation current

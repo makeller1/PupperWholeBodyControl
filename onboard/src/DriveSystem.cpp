@@ -2,21 +2,28 @@
 
 #include <ArduinoJson.h>
 #include <Streaming.h>
-
 #include "Utils.h"
+#include "Calibration.h"
 
 DriveSystem::DriveSystem() : front_bus_(), rear_bus_() 
 {
   control_mode_ = DriveControlMode::kIdle; //kIdle;
   fault_current_ = 10.0; // Violation sets control mode to kError
-  fault_position_array_[0] = PI/4; // hip fault_position
-  fault_position_array_[1] = 5.0;  // shoulder fault_position
-  fault_position_array_[2] = 5.0;  // elbow fault_position
+
+  // Fault positions measured relative to starting pose (laying down)
+  fault_position_array_high_[0] = 0.35; // hip fault position 
+  fault_position_array_high_[1] = 0.25;  // shoulder fault position
+  fault_position_array_high_[2] = 1.9;  // elbow fault position
+
+  fault_position_array_low_[0] = -0.35; // hip fault position
+  fault_position_array_low_[1] = -1.0; // 0.75 shoulder fault position
+  fault_position_array_low_[2] = -0.15; // elbow fault position
+
+  fault_velocity_ = 15.0;  // Reasonable value for standing up - will need to raise for gaits
 
   // Default values
   torques_ = {0,0,0,0,0,0,0,0,0,0,0,0};
-  fault_velocity_ = 35.0;  // TODO: Determine if this is reasonable
-  max_current_ = 3.0; // Saturates current command
+  max_current_ = 3.0; // Saturates current command - overridden by main.cpp
   viol_vel_mask_.fill(false);
   viol_pos_mask_.fill(false);
 
@@ -47,14 +54,14 @@ void DriveSystem::CheckForCANMessages()
 DriveControlMode DriveSystem::CheckErrors() 
 {
   bool error_found = false;
-
   for (size_t i = 0; i < kNumActuators; i++) 
   {
     // check positions
-    if (abs(GetActuatorPosition(i)) > fault_position_array_[i % 3]) 
+    if (GetActuatorPosition(i) > fault_position_array_high_[i%3] || GetActuatorPosition(i) < fault_position_array_low_[i%3]) 
     {
       viol_pos_mask_[i] = true;
       error_found = true;
+      // BeepLow(); // beep on
     }
     else
     {
@@ -74,6 +81,10 @@ DriveControlMode DriveSystem::CheckErrors()
 
   if (error_found)
   {
+    if (control_mode_ == DriveControlMode::kTorqueControl)
+    {
+      viol_pos_mask_first_ = viol_pos_mask_;
+    }
     return DriveControlMode::kError;
   }
   else
@@ -137,7 +148,6 @@ BLA::Matrix<12> DriveSystem::TorqueControl()
     motor_currents(i) = 1.0 * torques_(i); 
   }
   // Note: motor_currents are constrained in command_current to max_current_
-
   return motor_currents;
 }
 
@@ -157,7 +167,6 @@ void DriveSystem::Update()
     }
     case DriveControlMode::kTorqueControl: 
     {
-      //Serial << "Control Mode: " << "kTorqueControl" << endl;
       CommandCurrents(Utils::VectorToArray<12, 12>(TorqueControl()));
       break;
     }
@@ -178,8 +187,8 @@ void DriveSystem::Update()
 void DriveSystem::CommandBraking() 
 {
   // Regulate joint velocity to prevent destructive joint positions or velocities
-  const float Kd_viol = 1.2;
-  const float Kd_safe = 0.8;
+  const float Kd_viol = 2.0;
+  const float Kd_safe = 0.8; // 0.8
   ActuatorCurrentVector currents;
   currents.fill(0.0);
   for (size_t i=0; i < kNumActuators; i++)
@@ -245,7 +254,6 @@ void DriveSystem::CommandCurrents(ActuatorCurrentVector currents)
   // Convert from float array to int32 array in units milli amps.
   std::array<int32_t, kNumActuators> currents_mA =
       Utils::ConvertToFixedPoint(current_command, 1000);
-
   // Send current commands down the CAN buses (CommandTorques is a misnomer, actually passes currents)
   front_bus_.CommandTorques(currents_mA[0], currents_mA[1], currents_mA[2],
                             currents_mA[3], C610Subbus::kIDZeroToThree);
@@ -338,7 +346,10 @@ void DriveSystem::PrintMsgPackStatus(DrivePrintOptions options) {
   }
   if (control_mode_ == DriveControlMode::kError)
   {
-    doc["err"] = 1;
+    for (uint8_t i = 0; i < kNumActuators; i++)
+    {
+      doc["err"][i] = viol_pos_mask_first_[i];
+    }
   }
   uint16_t num_bytes = measureMsgPack(doc);
   // Serial.println(num_bytes);

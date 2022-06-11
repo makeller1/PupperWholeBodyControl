@@ -10,14 +10,14 @@
 
 const int CONTROL_DELAY = 1000;//1000;  // micros - mathew (Setting this to 10 results in CAN error)
 const int OBSERVE_DELAY = 1000;//1000; // micros
-const float MAX_CURRENT_DEFAULT = 1.0; // Amps - Default saturation value, is changed by run_djipupper
+const float MAX_CURRENT_DEFAULT = 2.0; // Amps - Default saturation value, is changed by run_djipupper
 
-const bool send_robot_states = true; // This is needed to send motor / IMU data over serial - mathew
+const bool send_robot_states = true; // This is needed to send pupper states over serial - mathew
 const bool print_cal_params = false; // Used to print the calibration parameters stored in persistent mem
 bool print_debug_info = false; 
 
 const bool ECHO_COMMANDS = false; // Set true for debugging
-const bool AHRS_ENABLED = false; // Are we running with the AHRS/IMU enabled?
+const bool AHRS_ENABLED = true; // Are we running with the AHRS/IMU enabled?
 
 // Calibration parameters
 float b_gyr_x;
@@ -40,11 +40,6 @@ ICM_20948_I2C myICM;  //create an ICM_20948_I2C object
 // Quaternions
 std::array<float,4> quats = {1.0f, 0.0f, 0.0f, 0.0f};
 
-float lastUpdate = 0.0f;
-float now = 0.0f;
-float dt = 0.0f;
-bool debug = false;
-
 std::array<float, 4> MadgwickUpdate(float gx, float gy, float gz, float ax, float ay, float az, 
                     float mx, float my, float mz, float q0, float q1, float q2, float q3, float dt);
 
@@ -60,9 +55,11 @@ const uint32_t kNumAttributes = 7 * 12 + 1;
 CommandInterpreter interpreter(true);
 DrivePrintOptions options;
 
+float dt = 0.0f;
 long last_command_ts;
 long last_print_ts;
 long last_cal_print_ts;
+long last_imu_update;
 long last_header_ts;
 
 void setup(void) {
@@ -75,6 +72,7 @@ void setup(void) {
     delay(125);
     digitalWrite(13, LOW);
     delay(125);
+    Beep(i, 0, 3);
   }
 
   // Read calibration parameters from EEPROM
@@ -126,9 +124,9 @@ void setup(void) {
     //////////////////////////////// END IMU SETUP ///////////////////////////////////////////
   }
 
-  last_command_ts = micros();
-  last_print_ts = millis();
-  last_header_ts = millis();
+  last_command_ts = micros(); // (micro sec)
+  last_print_ts = millis(); // (ms)
+  last_header_ts = millis(); // (ms)
 
   // Runtime config
   drive.SetMaxCurrent(MAX_CURRENT_DEFAULT);
@@ -147,8 +145,8 @@ void setup(void) {
 
 void loop() 
 {
-  drive.CheckForCANMessages();
-  CheckResult r = interpreter.CheckForMessages();
+  drive.CheckForCANMessages(); // Messages from motor controllers
+  CheckResult r = interpreter.CheckForMessages(); // Messages from Python workstation
   if (r.flag == CheckResultFlag::kNewCommand) {
     if (r.new_torque) 
     {
@@ -207,21 +205,19 @@ void loop()
   // Filter IMU data and send to DriveSystem
   if (AHRS_ENABLED)
   {
-    if(myICM.dataReady())
+    if(myICM.dataReady() && micros() - last_command_ts >= CONTROL_DELAY)
     {
-      myICM.getAGMT();                // The values are only updated when you call 'getAGMT'
-
-      // dt is throttled by the time it takes to recieve data from the IMU
-      now = micros();
-      dt = ((now - lastUpdate)/1000000.0f); 
-      lastUpdate = now;
+      // Read IMU data (takes 0.98 ms)
+      myICM.getAGMT();
 
       // Update filter
+      dt = (micros() - last_imu_update)/1000000.0f; 
       quats = MadgwickUpdate(myICM.gyrX()-b_gyr_x, myICM.gyrY()-b_gyr_y, myICM.gyrZ()-b_gyr_z, myICM.accX(), myICM.accY(), myICM.accZ(), 
                             (myICM.magX()-b_mag_x)*s_mag_x, -(myICM.magY()-b_mag_y)*s_mag_y, -(myICM.magZ()-b_mag_z)*s_mag_z,quats[0],quats[1],quats[2],quats[3], dt);
 
       // Send quaternion values to DriveSystem
       drive.SetQuaternions(quats[0],quats[1],quats[2],quats[3]);
+      last_imu_update = micros();
     }
   }
 

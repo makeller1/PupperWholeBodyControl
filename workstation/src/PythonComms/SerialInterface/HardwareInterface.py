@@ -136,7 +136,7 @@ class HardwareInterface:
 
     def run_calibration(self):
         # Run IMU calibration
-        self.send_dict({"calibrate_test": True})
+        self.send_dict({"calibrate": True})
 
     def zero_motors(self):
         self.send_dict({"zero": True})
