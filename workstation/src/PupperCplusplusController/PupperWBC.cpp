@@ -33,8 +33,6 @@ namespace {
         // Get the 3d axis difference
         VectorNd error3d = VectorNd::Zero(3);
         error3d = error.vec() * error.w()/abs(error.w());
-        // Remove yaw component 
-        // error3d(2) *= 0.1;
         return error3d;
     }
 
@@ -594,6 +592,12 @@ void PupperWBC::printDiag(){
             // cout << "OSQP Cost: " << T->task_weight*(0.5*optimal_qddot_.transpose()*j.transpose()*j*optimal_qddot_ - x_ddot_desired.transpose()*j*optimal_qddot_) << endl;
             cout << "Accel. Optimal: " << (j*optimal_qddot_).transpose() << endl;
             cout << "Accel. Desired: " << T->x_ddot_desired.transpose() << endl;
+            cout << "Pos. Meas: " << T->pos_measured.transpose() << endl;
+            
+            if (T->type == BODY_ORI){
+                cout << "P: " << T->Kp.cwiseProduct(quatDiff(T->quat_measured, T->quat_target)).transpose() << endl;
+                cout << "D: " << T->Kd.cwiseProduct(taskDerivative_(T) - T->x_ddot_ff).transpose() << endl;
+            }
         }
         else{
             // Diagnostics currently only compatible with tangential reaction force tracking tasks
@@ -603,7 +607,6 @@ void PupperWBC::printDiag(){
             optimal_rf_2d << optimal_rf_(i_foot*3), optimal_rf_(i_foot*3 + 1);
             rf_desired_2d << rf_desired(i_foot*3), rf_desired(i_foot*3 + 1);
             cout << "Cost: " << w_rf_xy*(optimal_rf_2d-rf_desired_2d).transpose()*(optimal_rf_2d-rf_desired_2d) << endl;
-            // cout << "OSQP Cost: " << w_rf_xy*(0.5*optimal_rf_2d.transpose()*optimal_rf_2d - rf_desired_2d.transpose()*optimal_rf_2d) << endl;
             cout << "Rf. Optimal: " << optimal_rf_2d.transpose() << endl;
             cout << "Rf. Desired: " << rf_desired_2d.transpose() << endl;
             cout << endl;
@@ -1020,6 +1023,9 @@ VectorNd PupperWBC::solveQP(int n, int m, MatrixNd &P, c_float  *q, MatrixNd &A,
         string message = "OSQP Solve failed with code: " + std::to_string(work->info->status_val);
         throw(std::runtime_error(message));
         // TODO: Engage motor braking
+    }
+    if (work->info->status_val == -2){
+        cout << "OSQP Solve error: " << std::to_string(work->info->status_val) << endl;
     }
 
     // Cleanup
