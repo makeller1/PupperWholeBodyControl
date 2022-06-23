@@ -1,2 +1,4 @@
 .vscode/
 plugins/build/
+*.npz
+*.cpython-38.pyc

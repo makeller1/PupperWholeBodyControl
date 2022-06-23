@@ -36,7 +36,8 @@ class whisperer:
         # pref : reference pos 12x1 (array)
         # lcur : last command 12x1 (array)
         # quat : robot orientation wxyz (array)
-        self.robot_states_ = {'pos': [0.0] * 12, 'vel': [0.0] * 12, 'cur': [0.0] * 12, 'quat' : [1.0,0,0,0]}
+        # mag : magnitude of normalized magnetometer (float)
+        self.robot_states_ = {'pos': [0.0] * 12, 'vel': [0.0] * 12, 'cur': [0.0] * 12, 'quat' : [1.0,0,0,0], 'mag': 1.0}
 
         # The zero position map is the joint position offset when the pupper is zeroed 
         # laying down with elbows back.                     
@@ -91,17 +92,27 @@ class whisperer:
 
     def get_pupper_orientation(self):
         if 'quat' in self.robot_states_:
-            quaternion = self.robot_states_['quat']
-            return quaternion
+            return self.robot_states_['quat']
         else:
             print("Quaternion could not be read")
             return [1,0,0,0]
 
-    def store_robot_states(self, robot_states):
+    def get_magnetom_mag(self):
+        # Returns the magnitude of the normalized magnetometer reading (should be near 1.0)
+        if 'mag' in self.robot_states_:
+            return self.robot_states_['mag'][0]
+        else:
+            print("Magnetom mag could not be read")
+            return 1.0
+
+    def store_robot_states(self, robot_states, print_warning = True):
         if robot_states is not None:
             self.robot_states_ = robot_states
+            return True
         else:
-            print("Robot states is None")
+            if print_warning:
+                print("Robot states is None")
+            return False
 
     def reorder_commands(self, commands):
         i = 0
@@ -117,12 +128,16 @@ class whisperer:
             # print("SIGN: ", sign)
         return commands_reordered
 
-    def check_errors(self):
+    def check_errors(self, print_warning = True):
         if "err" in self.robot_states_:
-            print("Fault limits violated. Pos faulted by motors: ", self.robot_states_['err'])
+            if print_warning is True:
+                print("Fault limits violated. Pos faulted by motors: ", self.robot_states_['err'])
             return True
         else:
             return False
+
+    def print_mag(self):
+        print("Magnetometer magnitude: {:.2f}".format(self.get_magnetom_mag()))
 
     def print_states(self, state_idx=0):
         # Print the states of each joint

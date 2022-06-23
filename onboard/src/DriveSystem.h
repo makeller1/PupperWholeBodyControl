@@ -19,6 +19,7 @@ struct DrivePrintOptions {
   bool velocities = true;
   bool currents = true;
   bool quaternion = true; 
+  bool mag = true;
   char delimiter = '\t';
 };
 
@@ -28,6 +29,7 @@ const uint8_t kNumDriveSystemDebugValues = 7*12 + 1;
 class DriveSystem {
  public:
   static const size_t kNumActuators = 12;  // TODO something else with this
+  float m_xyz_magnitude = 1.0; // Magnitude of corrected magnetometer reading (should be near 1)
 
  private:
   C610Bus<CAN1> front_bus_;

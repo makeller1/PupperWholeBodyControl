@@ -7,8 +7,7 @@ using namespace gazebo;
 This is skeleton code for a Gazebo world plugin if needed in the future. 
 It is not currently tied to the world Pupper is launched in. If this plugin
 is used, we will have to launch Gazebo and the Pupper in a different way than
-the current load_pupper.launch implementation. The Cmakelists.txt needs to be
-modified to include this code.
+the current load_pupper.launch implementation. 
 */
 void worldPlugin::Load(physics::WorldPtr _parent, sdf::ElementPtr _sdf)
 {	std::cout << "WorldPublisher: Entering Load()" << std::endl;

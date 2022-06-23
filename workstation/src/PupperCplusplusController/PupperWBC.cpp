@@ -7,9 +7,8 @@
 
 // TODO: 
 /*
-    - Use update routines instead of FormQP every call
-    - Set QP parameters in main function
     - Move x_ddot_desired calculation to its own function
+    - Define other WBC parameters with task master
     - Saturate x_ddot_desired
 */
 
@@ -27,10 +26,11 @@ using namespace RigidBodyDynamics::Math;
 namespace {
     Eigen::IOFormat f(3);
 
-    VectorNd quatDiff(Eigen::Quaternion<double> q1, Eigen::Quaternion<double> q2){
-        // Not 100% sure about this order
-        Eigen::Quaternion<double> error = q1 * q2.conjugate();
-        // Get the 3d axis difference
+    // Computes the rotation from q1 to q2 (analogous to q2-q1) as a non-normalized axis angle.
+    // The axis angle is described in the same frame as q1.
+    VectorNd quatDiff(Eigen::Quaternion<double> q2, Eigen::Quaternion<double> q1){
+        Eigen::Quaternion<double> error = q1.conjugate() * q2;
+        // Get the 3d axis angle of the rotation
         VectorNd error3d = VectorNd::Zero(3);
         error3d = error.vec() * error.w()/abs(error.w());
         return error3d;
@@ -45,6 +45,22 @@ namespace {
 
         cout << M << endl;
     }
+
+    // start timer (ms)
+    double tic(int mode=0) {
+        static std::chrono::_V2::system_clock::time_point t_start;
+        
+        if (mode==0)
+            t_start = std::chrono::high_resolution_clock::now();
+        else {
+            auto t_end = std::chrono::high_resolution_clock::now();
+            double t_delta = (t_end-t_start).count()*1E-6;
+            return t_delta;
+        }
+        return 0.0;
+    }
+    // return elapsed time (ms)
+    double toc() { return tic(1); }
 
 }
 
@@ -89,12 +105,18 @@ PupperWBC::PupperWBC(){
 void PupperWBC::updateController(const VectorNd& joint_angles, 
                                  const VectorNd& joint_velocities,
                                  const Eigen::Quaterniond& body_quaternion,
+                                 const Eigen::Vector3d& ang_velocity,
                                  const array<bool, 4>& feet_in_contact,
                                  const double time_s){
     // Copy over the joint states
     for (int i = 0; i < ROBOT_NUM_JOINTS; i++){
         joint_angles_[i+6]     = joint_angles[i];
         joint_velocities_[i+6] = joint_velocities[i];
+    }
+
+    // Copy over the body angular velocity states
+    for (int i = 0; i < 3; i++){
+        joint_velocities_[i+3] = ang_velocity[i];
     }
 
     // Record the body orientation quaternion
@@ -116,18 +138,38 @@ void PupperWBC::updateController(const VectorNd& joint_angles,
     massMat_.setZero(); // Required!
     Jc_.setZero(); // Just to be safe; not clear if this is required 
     b_g_.setZero(); // Just to be safe; not clear if this is required 
+
+    tic();
+    // Log time required to run this line
     updateContactJacobian_(true);
-    cout << "q angles: " << joint_angles_.transpose() << endl;
-    CompositeRigidBodyAlgorithm(Pupper_, joint_angles_, massMat_, true);
+    np_logger.logScalars({"ucj_ms"},{toc()});
+
+    tic();
+    // Log time required to run this line
+    CompositeRigidBodyAlgorithm(Pupper_, joint_angles_, massMat_, false);
+    np_logger.logScalars({"crb_ms"},{toc()});
+
+    tic();
+    // Log time required to run this line
     // if simulating in zero gravity, do not calculate nonlinear effects 
     NonlinearEffects(Pupper_, joint_angles_, joint_velocities_, b_g_);
+    np_logger.logScalars({"nle_ms"},{toc()});
+
     if (b_g_[2]==0.0){
         cout << "WARNING: NONLINEAR EFFECTS DISABLED" << endl;
     }
+
+    // Log states
+    np_logger.logScalars({"time_ms"},{time_s*1000.0f});
+    np_logger.logScalars({"quat_w","quat_x","quat_y","quat_z"},{body_quaternion.w(),body_quaternion.x(),body_quaternion.y(),body_quaternion.z()});
+    np_logger.logVectorXd("joint_ang",joint_angles);
+    np_logger.logVectorXd("joint_vel",joint_velocities);
+    np_logger.logVectorXd("ang_vel",ang_velocity);
 }
 
 // Add a task to the IHWBC controller
 void PupperWBC::addTask(string name, Task* T){
+    T->task_name = name;
     task_indices_[name] = robot_tasks_.size();
     robot_tasks_.push_back(T);
 
@@ -201,6 +243,10 @@ void PupperWBC::updateBodyOriTask(std::string name, Eigen::Quaternion<double> st
 }
 
 Task* PupperWBC::getTask(string name){
+    if (not task_indices_.count(name)) {
+        string message = "\e[1;33m Trying to get Task " + name + " which does not exist \e[0m";
+        throw(std::runtime_error(message));
+    }
     return robot_tasks_[task_indices_[name]];
 }
 
@@ -220,7 +266,10 @@ VectorNd PupperWBC::taskDerivative_(const Task *T){
         }
         case BODY_ORI:
             deriv.resize(3);
-            deriv = 2.0*quatDiff(T->quat_measured, T->last_quat_measured)/dt;
+            // for (int i = 0; i < 3; i++){
+            //     deriv(i) = joint_velocities_(i+3); // measured angular velocity
+            // }
+            deriv = 2.0*quatDiff(T->quat_measured, T->last_quat_measured)/dt; // Numerical derivative
             break;
 
         case JOINT_POS:
@@ -285,22 +334,25 @@ void PupperWBC::Load(Model& m){
 
 
 array<float, 12> PupperWBC::calculateOutputTorque(){
-    // Objective function terms
-    MatrixNd P = MatrixNd::Zero(NUM_JOINTS + 12, NUM_JOINTS + 12);
-    VectorNd q = VectorNd::Zero(NUM_JOINTS + 12);
-    
-    // Constraint terms
-    MatrixNd A = MatrixNd::Zero(38, NUM_JOINTS + 12); // 18 for torque limit, 16 for cone, 4 for normal reaction
-    VectorNd lower_bounds = VectorNd::Zero(38);
-    VectorNd upper_bounds = VectorNd::Zero(38);
-
     // Solve for q_ddot and reaction forces
-    cout << "FORMING QP ---------------------------------------------" << endl;
+    // cout << "FORMING QP ---------------------------------------------" << endl;
+    P.setZero();
+    q.setZero();
+    A.setZero();
+    lower_bounds.setZero();
+    upper_bounds.setZero();
+    tic();
+    // Log time required to run this line
     formQP(P, q, A, lower_bounds, upper_bounds);
-    VectorNd optimal_solution = solveQP(A.cols(), A.rows(), P, q.data(), A, lower_bounds.data(), upper_bounds.data());
+    np_logger.logScalars({"fqp_ms"},{toc()});
     
-    VectorNd q_ddot = optimal_solution.head(NUM_JOINTS);
-    VectorNd F_r    = optimal_solution.tail(12);
+    tic();
+    // Log time required to run this line
+    optimal_solution_ = solveQP(A.cols(), A.rows(), P, q.data(), A, lower_bounds.data(), upper_bounds.data());
+    np_logger.logScalars({"sqp_ms"},{toc()});
+
+    VectorNd q_ddot = optimal_solution_.head(NUM_JOINTS);
+    VectorNd F_r    = optimal_solution_.tail(12);
 
     // cout << "Solution: -----------------" << endl;
     // for (int i = 0; i < optimal_solution.size(); i++){
@@ -310,6 +362,7 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
 
     // Solve for the command torques
     VectorNd tau = (massMat_*q_ddot + b_g_ - Jc_.transpose()*F_r).tail(ROBOT_NUM_JOINTS);
+
     // Store optimal motor accelerations
     control_qddot_ = q_ddot.tail(ROBOT_NUM_JOINTS);
 
@@ -317,7 +370,7 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
     optimal_qddot_ = q_ddot;
     optimal_rf_ = F_r;
 
-    VectorNd Fr = optimal_solution.tail(12); // reaction forces
+    VectorNd Fr = optimal_solution_.tail(12); // reaction forces
     // VectorNd tau_gen = VectorNd::Zero(18); // generalized torques
     // tau_gen.tail(12) = tau;
     
@@ -331,11 +384,15 @@ array<float, 12> PupperWBC::calculateOutputTorque(){
     // cout << optimal_solution.head(18).transpose().format(f) << endl;
     //cout << "Qdotdot RBDL: \n" << QDDOT.transpose().format(f) << endl;
     // cout << " --------------------------------------" << endl;
-    std::cout << std::setprecision(3) << std::fixed;
-    cout << "Commanded Torques: -----------------" << endl;
-    cout << tau.transpose() << endl;
-    cout << "Reaction Forces OSQP: -----------------" << endl;
-    cout << Fr.transpose().format(f) << endl;
+
+    // std::cout << std::setprecision(3) << std::fixed;
+    // cout << "Commanded Torques: -----------------\n";
+    // cout << tau.transpose() << "\n";
+    // cout << "Reaction Forces OSQP: --------------\n";
+    // cout << Fr.transpose().format(f) << endl;
+    np_logger.logVectorXd("joint_q_ddot",control_qddot_);
+    np_logger.logVectorXd("tau",tau);
+    np_logger.logVectorXd("Fr",Fr);
 
     // cout << "Jc' (floating base): " << endl;
     // cout << (Jc_.transpose()).topRows(6) << endl;
@@ -442,7 +499,7 @@ MatrixNd PupperWBC::getBodyJacobian_(string body_id, const Eigen::Vector3d& offs
     // PRINT_CLEAN(J);
     
     // calcPointJacobian6D returns J such that [w;v] = J*q_dot where [w;v] is described in the base frame
-    CalcPointJacobian6D(Pupper_, joint_angles_, Pupper_.GetBodyId(body_id.c_str()), offset, J, true);
+    CalcPointJacobian6D(Pupper_, joint_angles_, Pupper_.GetBodyId(body_id.c_str()), offset, J, false);
     // PRINT_CLEAN(J);
     return J;
 }
@@ -549,74 +606,59 @@ void PupperWBC::updateContactJacobian_(bool update_kinematics){
 }
 
 void PupperWBC::printDiag(){
+    tic();
     // only weight>0
     // only active targets 
     for (int i = 0; i < robot_tasks_.size(); i++ ){
         Task* T = robot_tasks_[i];
         
-
         if (T->task_weight == 0){
             continue;
         }
-        string task_name = T->body_id;
         MatrixNd j = getTaskJacobian_(i);
         VectorNd x_ddot_desired = T->x_ddot_desired;
         
-        switch(T->type){
-            // Note desired acceleration is -x_ddot_desired
-            case BODY_ORI:
-                task_name = "ORI: " + task_name;
-                break;
-
-            case BODY_POS:
-                task_name = "POS: " + task_name;
-                break;
-
-            case JOINT_POS:
-                task_name = "JOINT POS: " + task_name;
-                break;
-
-            case REACTION_FORCE:
-                task_name = "Reaction Forces: " + task_name;
-                break;
-        }
-        cout << "###################################" << endl;
-        // std::cout << std::setprecision(8) << std::fixed;
-        // cout << "Task Jacobian: \n" << j << endl;
-        std::cout << std::setprecision(3) << std::fixed;
-        cout << "Task " << task_name << endl;
-        cout << "Weight: " << T->task_weight << endl;
+        // cout << "###################################" << endl;
+        // cout << "Task " << T->task_name << "\n";
+        // cout << "Weight: " << T->task_weight << "\n";
 
         if (T->type != REACTION_FORCE){
-            cout << "Cost: " << T->task_weight*(j*optimal_qddot_ - T->x_ddot_desired).transpose()*(j*optimal_qddot_ - T->x_ddot_desired) << endl;
-            // cout << "OSQP Cost: " << T->task_weight*(0.5*optimal_qddot_.transpose()*j.transpose()*j*optimal_qddot_ - x_ddot_desired.transpose()*j*optimal_qddot_) << endl;
-            cout << "Accel. Optimal: " << (j*optimal_qddot_).transpose() << endl;
-            cout << "Accel. Desired: " << T->x_ddot_desired.transpose() << endl;
-            cout << "Pos. Meas: " << T->pos_measured.transpose() << endl;
-            
+            double cost = T->task_weight*(j*optimal_qddot_ - T->x_ddot_desired).transpose()*(j*optimal_qddot_ - T->x_ddot_desired);
+            auto acc_opt = j*optimal_qddot_; // optimal acceleration
+            auto acc_des = T->x_ddot_desired; // target acceleration
+            // cout << "Cost: " << cost << "\n";
+            // cout << "Accel. Optimal: " << acc_opt.transpose() << "\n";
+            // cout << "Accel. Desired: " << acc_des.transpose() << "\n";
+            // cout << "Pos. Meas: " << T->pos_measured.transpose() << "\n";
+            // cout << "Pos. Target: " << T->pos_target.transpose() << endl;
+
+            // log data in numpy format
+            np_logger.logScalars({T->task_name+"_weight"},{T->task_weight});
+            np_logger.logScalars({T->task_name+"_cost"},{cost});
+            np_logger.logVectorXd(T->task_name+"_acc_opt",acc_opt);
+            np_logger.logVectorXd(T->task_name+"_acc_des",T->x_ddot_desired);
+            np_logger.logVectorXd(T->task_name+"_pos_measured",T->pos_measured);
+            np_logger.logVectorXd(T->task_name+"_pos_target",T->pos_target);
+
             if (T->type == BODY_ORI){
-                cout << "P: " << T->Kp.cwiseProduct(quatDiff(T->quat_measured, T->quat_target)).transpose() << endl;
-                cout << "D: " << T->Kd.cwiseProduct(taskDerivative_(T) - T->x_ddot_ff).transpose() << endl;
+                // cout << "P: " << T->Kp.cwiseProduct(quatDiff(T->quat_measured, T->quat_target)).transpose() << "\n";
+                // cout << "D: " << T->Kd.cwiseProduct(taskDerivative_(T) - T->x_ddot_ff).transpose() << endl;
             }
         }
         else{
-            // Diagnostics currently only compatible with tangential reaction force tracking tasks
+            // Diagnostics currently only for tangential reaction force tracking tasks
             int i_foot = feet_indices.at(T->body_id);
             Vector2d optimal_rf_2d;
             Vector2d rf_desired_2d;
             optimal_rf_2d << optimal_rf_(i_foot*3), optimal_rf_(i_foot*3 + 1);
             rf_desired_2d << rf_desired(i_foot*3), rf_desired(i_foot*3 + 1);
-            cout << "Cost: " << w_rf_xy*(optimal_rf_2d-rf_desired_2d).transpose()*(optimal_rf_2d-rf_desired_2d) << endl;
-            cout << "Rf. Optimal: " << optimal_rf_2d.transpose() << endl;
-            cout << "Rf. Desired: " << rf_desired_2d.transpose() << endl;
-            cout << endl;
-            cout << "Pos target: " << T->pos_target.transpose() << endl;
-            cout << "Pos measured: " << T->pos_measured.transpose() << endl;
-            cout << "Vel target: " << T->dpos_target.transpose() << endl;
-            cout << "Vel measured: " << taskDerivative_(T).transpose() << endl;
+            // cout << "Cost: " << w_rf_xy*(optimal_rf_2d-rf_desired_2d).transpose()*(optimal_rf_2d-rf_desired_2d) << endl;
+            // cout << "Rf. Optimal: " << optimal_rf_2d.transpose() << endl;
+            // cout << "Rf. Desired: " << rf_desired_2d.transpose() << endl;
         }
         
     }
+    np_logger.logScalars({"pdg_ms"},{toc()});
 }
 
 void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, VectorNd &u){
@@ -648,28 +690,13 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
         
         MatrixNd j = getTaskJacobian_(i);
         MatrixNd U_active = getTaskU_(i);
-        //-----------------Calculate j_dot-----------------
-        // MatrixNd j_dot;
-        // double delta_t = (now() - t_prev_); // seconds
-        // if (T->j_prev_updated == true){
-        //     j_dot = (j - T->j_prev)/delta_t;
-        //     // cout << "j_dot calculated" << endl;
-        //     // cout << "delta_t: " << delta_t << endl;
-        // }
-        // else{
-        //     j_dot = MatrixNd::Zero(j.rows(),j.cols());
-        //     T->j_prev_updated = true;
-        // }
-        // T->j_prev = j;
-        // MatrixNd j_dot_q_dot = j_dot * joint_velocities_;
-        //--------------------------------------------------
 
         VectorNd x_ddot_desired = VectorNd::Zero(T->active_targets.size());
 
         switch(T->type){
-            // Note desired acceleration is -x_ddot_desired
+            // Note: desired acceleration is -x_ddot_desired
             case BODY_ORI:
-                x_ddot_desired = T->Kp.cwiseProduct(quatDiff(T->quat_measured, T->quat_target)) + T->Kd.cwiseProduct(taskDerivative_(T) - T->x_ddot_ff);
+                x_ddot_desired = T->Kp.cwiseProduct(quatDiff(T->quat_measured, T->quat_target)) + T->Kd.cwiseProduct(taskDerivative_(T)) - T->x_ddot_ff;
                 break;
 
             case BODY_POS:
@@ -702,54 +729,46 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
                 cout << "rf_redired leg " << T->body_id << ": " << rf_desired_3d.transpose() << endl;
                 break;
         }
+
         // Remove inactive rows
         x_ddot_desired = U_active * x_ddot_desired;
 
         // For logging
         T->x_ddot_desired = -x_ddot_desired;
 
-        if (T->type == BODY_POS){
-            if (T->body_id == "front_right_foot"){
-                // cout << "J_task: " << endl << j.format(f) << endl;
-                // cout << T->body_id << " target: " << T->pos_target.transpose() << endl;
-                // cout << T->body_id << " measrd: " << T->pos_measured.transpose() << endl;
-                // cout << T->body_id << " active targets: [" << T->active_targets[0] << T->active_targets[1] << T->active_targets[2] << "]" << endl;
+        if ((T->type == BODY_POS) &&
+           (T->body_id == "back_left_foot" || T->body_id == "back_right_foot" || T->body_id == "front_left_foot" || T->body_id == "front_right_foot")){
+            //-----------------Calculate j_dot-----------------
+            MatrixNd j_dot;
+            double delta_t = (now() - t_prev_); // seconds
+            if (T->j_prev_updated == true){
+                j_dot = (j - T->j_prev)/delta_t;
+                // cout << "j_dot calculated" << endl;
+                // cout << "delta_t: " << delta_t << endl;
             }
-        }
-        if (T->type == JOINT_POS){
-            // std::cout << std::setprecision(3) << std::fixed;
-            // cout << "***************************************" << endl;
-            // cout << "Angle measrd: " << T->joint_measured.transpose() << endl;
-            // cout << "Angle target: " << T->joint_target.transpose() << endl;
-            // cout << "---------------------------------------" << endl;
-            // cout << "Vlcty measrd: " << T->djoint_measured.transpose() << endl;
-            // cout << "Vlcty target: " << T->djoint_target.transpose() << endl;
-            // cout << "***************************************" << endl;
-        }
+            else{
+                j_dot = MatrixNd::Zero(j.rows(),j.cols());
+                T->j_prev_updated = true;
+            }
+            T->j_prev = j;
+            MatrixNd j_dot_q_dot = j_dot * joint_velocities_;
+            if (T->body_id == "back_left_foot"){
+                np_logger.logVectorXd("j_dot_bl_z",j_dot.row(2));
+            }
 
-        if (T->type == BODY_ORI){
-            // cout << "J_task: " << endl << j.format(f) << endl;
-            // cout << "***************************************" << endl;
-            // cout << "quat_measured w,x,y,z : " << T->quat_measured.w() << " " << T->quat_measured.x() << " " << T->quat_measured.y() << " " << T->quat_measured.z() << endl;
-            // cout << "last_quat_measured w,x,y,z: " << T->last_quat_measured.w() << " " << T->last_quat_measured.x() << " " << T->last_quat_measured.y() << " " << T->last_quat_measured.z() << endl;
-            // cout << "---------------------------------------" << endl;
-            // cout << "Quat Diff Calculated: " << quatDiff(T->quat_measured, T->quat_target).transpose() << endl;
-            // cout << "Quat Deriv Calculated: " << (taskDerivative_(T)).transpose() << endl;
-            // cout << "---------------------------------------" << endl;
-            // cout << "xyz of quaternion measured: " << joint_angles_.segment(3,3).transpose() << endl;
-            // cout << "Ang Velcity measured: " << joint_velocities_.segment(3,3).transpose() << endl;
-            // cout << "***************************************" << endl;
+            // with j_dot_q_dot
+            cost_t_vec += T->task_weight * j.transpose() * (j_dot_q_dot + x_ddot_desired); // nq x 1 
         }
-
-        cost_t_mat += T->task_weight * j.transpose() * j; // nq x nq
-
-        //----------------- WITH j_dot_q_dot ----------------
-        //cost_t_vec += T->task_weight * j.transpose() * (j_dot_q_dot + x_ddot_desired); // nq x 1 // Double check this for correctness
+        else{
+            // without j_dot_q_dot
+            cost_t_vec += T->task_weight * j.transpose() * x_ddot_desired; // nq x 1
+        }
 
         //----------------- WITHOUT j_dot_q_dot -------------
-        cost_t_vec += T->task_weight * j.transpose() * x_ddot_desired; // nq x 1
+        // cost_t_vec += T->task_weight * j.transpose() * x_ddot_desired; // nq x 1
         //---------------------------------------------------
 
+        cost_t_mat += T->task_weight * j.transpose() * j; // nq x nq
 
     }
     // Add a cost to penalize high joint accelerations
@@ -829,7 +848,7 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     // 0 <= Fr_z <= rf_z_max     (l = u = 0 for feet commanded to swing or floating)
 
     double rf_z_max = 100; // Max normal reaction force
-    double rf_z_min = 0.5; // Min normal reaction force
+    double rf_z_min = 1.5; // Min normal reaction force
     MatrixNd reaction_force_mat = MatrixNd::Zero(20, NUM_JOINTS + 12); // Block matrix to store inequality matrix 20x30
     MatrixNd A_fr = MatrixNd::Zero(20,12); // Inequality matrix for reaction forces (12 for Fr_z, 8 for Fr_x/Fr_z)
     VectorNd reaction_force_lower_limit = VectorNd::Zero(20); // Min reaction force (zero for normal reaction forces)
@@ -948,41 +967,19 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
     u.head(NUM_JOINTS) = torque_upper_limit;
     l.tail(20) = reaction_force_lower_limit;
     u.tail(20) = reaction_force_upper_limit;
-
-    // cout << "P size: " << P.rows() << "x" << P.cols() << endl;
-    // cout << "A size: " << A.rows() << "x" << A.cols() << endl;
-
-    // cout<< "P Matrix: \n" << P.format(f) << endl << endl;
-    // cout<< "q Matrix: \n" << q.format(f) << endl << endl;
-
-    // cout<< "A Matrix: \n" << A.format(f) << endl << endl;
-    // cout<< "l vector: \n" << l.format(f) << endl << endl;
-    // cout<< "u vector: \n" << u.format(f) << endl << endl;
-
-    // cout<< "A matrix bottom right: \n" << A.bottomRightCorner(12,12).format(f) << endl << endl;
-    // cout<< "l vector bottom 12: \n" << l.tail(12).format(f) << endl << endl;
-    // cout<< "u vector bottom 12: \n" << u.tail(12).format(f) << endl << endl;
-
-    // cout << "massMat: \n" << massMat_.topRows(6).format(f) << endl;
-    // std::cout << std::setprecision(8) << std::fixed;
-    // cout << "Jc_'.topRows(6): \n" << (Jc_).transpose().topRows(6).format(f) << endl;
-    // cout << "combined: \n" << eq_mat_0.format(f) << endl;
 }
 
-
-VectorNd PupperWBC::solveQP(int n, int m, MatrixNd &P, c_float  *q, MatrixNd &A, c_float  *lb, c_float  *ub){
-
+void PupperWBC::setupOSQP(int n, int m, MatrixNd &P, c_float  *q, MatrixNd &A, c_float  *lb, c_float  *ub){
     //Convert matrices into csc form
     vector<c_float> P_x, A_x;
     vector<c_int>   P_p, P_i, A_p, A_i;
-    convertEigenToCSC_(P, P_x, P_p, P_i, true);
-    convertEigenToCSC_(A, A_x, A_p, A_i);
+    convertEigenToCSCSparsePat_(P, P_x, P_p, P_i, true);
+    convertEigenToCSCSparsePat_(A, A_x, A_p, A_i);
 
     // Exitflag
     c_int exitflag = 0;
 
     // Workspace structures
-    OSQPWorkspace *work;
     OSQPSettings  *settings = QP_settings_.get();
     OSQPData      *data     = QP_data_.get();
 
@@ -1005,41 +1002,173 @@ VectorNd PupperWBC::solveQP(int n, int m, MatrixNd &P, c_float  *q, MatrixNd &A,
         settings->eps_dual_inf = 1e-2; // Dual infeasibility tolerance
         // settings->polish = 1; // For high quality solution
         settings->verbose = 0;   // Print information? 
-        settings->scaling = 75; // Number of scaling iterations - could speed up solver and avoid failures (20)
+        settings->scaling = 10; // Number of scaling iterations - could speed up solver and avoid failures but increases update time significantly  (20)
     }
 
     // Setup workspace
-    exitflag = osqp_setup(&work, data, settings);
-
-    // Solve Problem
-    osqp_solve(work);
-
+    exitflag = osqp_setup(&work_, data, settings);
     if (exitflag != 0){
         string message = "OSQP Setup failed with code: " + std::to_string(exitflag);
         throw(std::runtime_error(message));
-        // TODO: Engage motor braking
     }
-    if (work->info->status_val != 1 && work->info->status_val != 2 && work->info->status_val != -2){
-        string message = "OSQP Solve failed with code: " + std::to_string(work->info->status_val);
+}
+
+VectorNd PupperWBC::solveQP(int n, int m, MatrixNd &P, c_float *q, MatrixNd &A, c_float *lb, c_float *ub){
+    static uint count = 0;
+    count += 1;
+    if (count == 1){
+        setupOSQP(n, m, P, q, A, lb, ub);
+        // Change run limit setting (after setup)
+        work_->settings->time_limit = 0.001;
+    }
+
+    //Convert matrices into csc form
+    vector<c_float> P_x, A_x;
+    vector<c_int>   P_p, P_i, A_p, A_i;
+    convertEigenToCSCSparsePat_(P, P_x, P_p, P_i, true);
+    convertEigenToCSCSparsePat_(A, A_x, A_p, A_i);
+
+    // Exitflag
+    c_int exitflag = 0;
+
+    osqp_update_lin_cost(work_, q);
+    osqp_update_bounds(work_, lb, ub);
+    exitflag = osqp_update_P(work_, P_x.data(), OSQP_NULL, P_x.size());
+    
+    if (exitflag != 0){
+        string message = "osqp_update_P failed with code: " + std::to_string(exitflag);
+        throw(std::runtime_error(message));
+    }
+
+    osqp_update_A(work_, A_x.data(), OSQP_NULL, A_x.size());
+
+    // Solve Problem
+    osqp_solve(work_);
+
+    int solve_status = work_->info->status_val;
+    if (solve_status != 1 && solve_status != 2 && solve_status != -2 && solve_status != -6){
+        string message = "OSQP Solve failed with code: " + std::to_string(solve_status);
         throw(std::runtime_error(message));
         // TODO: Engage motor braking
     }
-    if (work->info->status_val == -2){
-        cout << "OSQP Solve error: " << std::to_string(work->info->status_val) << endl;
+    if (solve_status == -2){
+        cout << "OSQP Solve error: " << std::to_string(solve_status) << endl;
     }
-
-    // Cleanup
-    if (data) {
-        if (data->A) c_free(data->A);
-        if (data->P) c_free(data->P);
-    }
-
     // QP solution vector [q_ddot;Fr]
     VectorNd sol(NUM_JOINTS + 12);
-    std::copy(work->solution->x, work->solution->x + sol.size(), sol.data());
+    std::copy(work_->solution->x, work_->solution->x + sol.size(), sol.data());
+
+    // Log solver run time and status
+    float solve_status_f = solve_status;
+    np_logger.logScalars({"run_ms"},{work_->info->run_time*1000.0f});
+    np_logger.logScalars({"update_ms"},{work_->info->update_time*1000.0f});
+    np_logger.logScalars({"solve_ms"},{work_->info->solve_time*1000.0f});
+    np_logger.logScalars({"setup_ms"},{work_->info->setup_time*1000.0f});
+    np_logger.logScalars({"solve_code"},{solve_status_f});
+    np_logger.logScalars({"timelimit"},{work_->settings->time_limit*1000.0f});
     return sol;
 }
 
+
+// VectorNd PupperWBC::solveQP(int n, int m, MatrixNd &P, c_float  *q, MatrixNd &A, c_float  *lb, c_float  *ub){
+//     // Old version that setup osqp every iteration
+//     //Convert matrices into csc form
+//     vector<c_float> P_x, A_x;
+//     vector<c_int>   P_p, P_i, A_p, A_i;
+//     convertEigenToCSC_(P, P_x, P_p, P_i, true);
+//     convertEigenToCSC_(A, A_x, A_p, A_i);
+
+//     // Exitflag
+//     c_int exitflag = 0;
+
+//     // Workspace structures
+//     OSQPWorkspace *work;
+//     OSQPSettings  *settings = QP_settings_.get();
+//     OSQPData      *data     = QP_data_.get();
+
+//     // Populate data
+//     if (data) {
+//         data->n = n;
+//         data->m = m;
+//         data->P = csc_matrix(n, n, P_p.back(), P_x.data(), P_i.data(), P_p.data());
+//         data->q = q;
+//         data->A = csc_matrix(m, n, A_p.back(), A_x.data(), A_i.data(), A_p.data());
+//         data->l = lb;
+//         data->u = ub;
+//     }
+
+//     // Define solver settings as default
+//     if (settings) {
+//         osqp_set_default_settings(settings);
+//         settings->eps_rel = 0.0;       // Change relative tolerance to handle large costs
+//         settings->eps_prim_inf = 1e-2; // Primal infeasibility tolerance
+//         settings->eps_dual_inf = 1e-2; // Dual infeasibility tolerance
+//         // settings->polish = 1; // For high quality solution
+//         settings->verbose = 1;   // Print information? 
+//         settings->scaling = 75; // Number of scaling iterations - could speed up solver and avoid failures (20)
+//     }
+
+//     // Setup workspace
+//     exitflag = osqp_setup(&work, data, settings);
+
+//     // Solve Problem
+//     osqp_solve(work);
+
+//     if (exitflag != 0){
+//         string message = "OSQP Setup failed with code: " + std::to_string(exitflag);
+//         throw(std::runtime_error(message));
+//         // TODO: Engage motor braking
+//     }
+//     if (work->info->status_val != 1 && work->info->status_val != 2 && work->info->status_val != -2){
+//         string message = "OSQP Solve failed with code: " + std::to_string(work->info->status_val);
+//         throw(std::runtime_error(message));
+//         // TODO: Engage motor braking
+//     }
+//     if (work->info->status_val == -2){
+//         cout << "OSQP Solve error: " << std::to_string(work->info->status_val) << endl;
+//     }
+
+//     // Cleanup
+//     if (data) {
+//         if (data->A) c_free(data->A);
+//         if (data->P) c_free(data->P);
+//     }
+
+//     // QP solution vector [q_ddot;Fr]
+//     VectorNd sol(NUM_JOINTS + 12);
+//     std::copy(work->solution->x, work->solution->x + sol.size(), sol.data());
+//     return sol;
+// }
+
+void PupperWBC::convertEigenToCSCSparsePat_(const MatrixNd &P, vector<c_float> &P_x, vector<c_int> &P_p, vector<c_int> &P_i, bool triup){
+    // Convert Eigen types to CSC used in OSQP solver
+    // Clear any existing data from the vectors
+    P_x.clear();
+    P_i.clear();
+
+    P_p.clear();
+    P_p.push_back(0);
+    
+    const int num_rows = P.rows();
+    const int num_cols = P.cols();
+    for (Eigen::Index c = 0; c < num_cols; c++){
+        // Look through the matrix column by column
+        const double* col = P.col(c).data();
+
+        // Iterate through the column to look for non-zero elements
+        for (int i = 0; i < num_rows; i++){
+            if (triup and P_sparsity_.at(i).at(c) == true or not triup and A_sparsity_.at(i).at(c) == true){
+                // Store the value of the element in P_x and its row index in P_i
+                P_x.push_back(col[i]);
+                P_i.push_back(i);
+            }
+
+            if (triup and i == c) break;
+        }
+
+        P_p.push_back(P_x.size());
+    }
+}
 
 void PupperWBC::convertEigenToCSC_(const MatrixNd &P, vector<c_float> &P_x, vector<c_int> &P_p, vector<c_int> &P_i, bool triup){
     // Convert Eigen types to CSC used in OSQP solver

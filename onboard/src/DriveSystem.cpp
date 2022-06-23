@@ -11,11 +11,11 @@ DriveSystem::DriveSystem() : front_bus_(), rear_bus_()
   fault_current_ = 10.0; // Violation sets control mode to kError
 
   // Fault positions measured relative to starting pose (laying down)
-  fault_position_array_high_[0] = 0.35; // hip fault position 
+  fault_position_array_high_[0] = 0.35; // 0.35 hip fault position 
   fault_position_array_high_[1] = 0.25;  // shoulder fault position
   fault_position_array_high_[2] = 1.9;  // elbow fault position
 
-  fault_position_array_low_[0] = -0.35; // hip fault position
+  fault_position_array_low_[0] = -0.35; // -0.35 hip fault position
   fault_position_array_low_[1] = -1.0; // 0.75 shoulder fault position
   fault_position_array_low_[2] = -0.15; // elbow fault position
 
@@ -28,10 +28,10 @@ DriveSystem::DriveSystem() : front_bus_(), rear_bus_()
   viol_pos_mask_.fill(false);
 
   // quaternion of sensor frame relative to global frame
-  q0_ = 1;
-  q1_ = 0;
-  q2_ = 0;
-  q3_ = 0;
+  q0_ = 1; // w
+  q1_ = 0; // x
+  q2_ = 0; // y
+  q3_ = 0; // z
   
   //  Currently implement the zero-offset in python
   //                              FR0, FR1, FR2                   FL0, FL1, FL2                  BR0,BR1,BR2                    BL0,BL1,BL2     
@@ -157,6 +157,7 @@ void DriveSystem::Update()
   if (CheckErrors() == DriveControlMode::kError) 
   {
     control_mode_ = DriveControlMode::kError;
+    SetMaxCurrent(5.0f); // In case Teensy code fails
   }
   switch (control_mode_) 
   {
@@ -343,6 +344,10 @@ void DriveSystem::PrintMsgPackStatus(DrivePrintOptions options) {
     doc["quat"][1] = q1_; // x
     doc["quat"][2] = q2_; // y
     doc["quat"][3] = q3_; // z
+  }
+  if (options.mag)
+  {
+    doc["mag"][0] = m_xyz_magnitude;
   }
   if (control_mode_ == DriveControlMode::kError)
   {

@@ -1,6 +1,4 @@
-# TODO: Fix the torque to current transformation. 
-#         - The velocity and torque are not aligning correctly so the driving mode doesn't change
-#           from forward to backward.
+# This code used to test the ros node for topic message delays, drops, etc.
 #       
 
 #!/usr/bin/env python
@@ -87,7 +85,6 @@ def main():
             # #Print states
             # PupComm.print_states(0)
             # PupComm.print_states(1)
-            # PupComm.print_mag()
 
             # Read data from pupper
             PupComm.store_robot_states(hardware_interface.get_robot_states())

@@ -1,5 +1,5 @@
 #include "Calibration.h"
-
+#define BEEP_PIN 14 // 14 on pupper, 2 on single motor setup
 
 bool CalibrateIMU(std::array<float, 6> raw_data)
 {   // Inputs: raw_data - array with elements mag_x, mag_y, mag_z, gry_x, gry_y, gry_z
@@ -53,12 +53,12 @@ bool CalibrateIMU(std::array<float, 6> raw_data)
     {
         Beep(k, ITER_1, ITER_1 + 75);
         // Perform MAG scaling calibration
-            BLA::Matrix<1,3> Hk2 = {(raw_data[0]-.5f*x_hat(0))*(raw_data[0]-.5f*x_hat(0)),
-                                    (raw_data[1]-.5f*x_hat(1))*(raw_data[1]-.5f*x_hat(1)),
-                                    (raw_data[2]-.5f*x_hat(2))*(raw_data[2]-.5f*x_hat(2))};
-            BLA::Matrix<3,1> Kk2 = (Pk2*~Hk2)/((Hk2*Pk2*~Hk2+1)(0));
-            Pk2 = (I_3 - Kk2*Hk2)*Pk2;
-            x_hat2 = x_hat2 + Kk2*(1.0f - (Hk2*x_hat2)(0));
+        BLA::Matrix<1,3> Hk2 = {(raw_data[0]-.5f*x_hat(0))*(raw_data[0]-.5f*x_hat(0)),
+                                (raw_data[1]-.5f*x_hat(1))*(raw_data[1]-.5f*x_hat(1)),
+                                (raw_data[2]-.5f*x_hat(2))*(raw_data[2]-.5f*x_hat(2))};
+        BLA::Matrix<3,1> Kk2 = (Pk2*~Hk2)/((Hk2*Pk2*~Hk2+1)(0));
+        Pk2 = (I_3 - Kk2*Hk2)*Pk2;
+        x_hat2 = x_hat2 + Kk2*(1.0f - (Hk2*x_hat2)(0));
     }
 
     if (k == ITER_2) // Strict equality to prevent redundant EEPROM writing
@@ -126,11 +126,11 @@ void Beep(int k, int iter_0, int iter_f)
 {
     if (k >= iter_0 && k <= iter_f)
     {
-        analogWrite(14, 10); // Sound
+        analogWrite(BEEP_PIN, 10); // Sound
     }
     else
     {
-        analogWrite(14, 0); // Silent
+        analogWrite(BEEP_PIN, 0); // Silent
     }
 }
 
@@ -138,20 +138,20 @@ void BeepLow(int k, int iter_0, int iter_f)
 {
     if (k >= iter_0 && k <= iter_f)
     {
-        analogWrite(14, 5); // Sound
+        analogWrite(BEEP_PIN, 5); // Sound
     }
     else
     {
-        analogWrite(14, 0); // Silent
+        analogWrite(BEEP_PIN, 0); // Silent
     }
 }
 
 float CheckCalMag(std::array<float, 3> mag_data, std::array<float, 9> calib_params) // Returns the mean of the magnetometer magnitude
 {
-    // Tests if the calibration is still working by calculating the mean of the magnetic field magnitude.
-    // Correct calibration should result in a value near 1.0 +/- .1 for any orientation.
+    // Tests if the calibration is still required by calculating the magnitude of the magnetic field.
+    // Correct calibration should result in a value near 1.0 +/- .2 for any orientation.
     static int k = 1;
-    static float r_mean = 0;
+    // static float r_mean = 0;
 
     float& b_mag_x = calib_params[3];
     float& b_mag_y = calib_params[4];
@@ -160,7 +160,9 @@ float CheckCalMag(std::array<float, 3> mag_data, std::array<float, 9> calib_para
     float& s_mag_y = calib_params[7];
     float& s_mag_z = calib_params[8];
 
-    float radius_k = pow((mag_data[0]-b_mag_x)*s_mag_x, 2) + pow((mag_data[1]-b_mag_y)*s_mag_y, 2) + pow((mag_data[2]-b_mag_z)*s_mag_z, 2);
-    r_mean = r_mean + 1.0/(float)k *(radius_k - r_mean);
-    return r_mean;
+    float magnitude_k = pow((mag_data[0]-b_mag_x)*s_mag_x, 2) + pow((mag_data[1]-b_mag_y)*s_mag_y, 2) + pow((mag_data[2]-b_mag_z)*s_mag_z, 2);
+    // r_mean = r_mean + 1.0/(float)k *(magnitude_k - r_mean);
+    // k = k + 1;
+
+    return magnitude_k;
 }

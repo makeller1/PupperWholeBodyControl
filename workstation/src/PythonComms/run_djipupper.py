@@ -5,6 +5,7 @@
 
 #!/usr/bin/env python
 ################ FOR ROS #######################
+from cmath import pi
 import rospy
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import JointState
@@ -23,7 +24,7 @@ import time
 
 def quaternion_relative(Q0,Q1):
     """
-    Multiplies two quaternions Q0 * Q1.conjugate()
+    Multiplies two quaternions Q0.conjugate() * Q1
     where Q0 is the initial quat and Q1 is the current quat
     Assumes unitary quaternions.
 
@@ -37,15 +38,15 @@ def quaternion_relative(Q0,Q1):
     """
     # Extract the values from Q0
     w0 = Q0[0]
-    x0 = Q0[1]
-    y0 = Q0[2]
-    z0 = Q0[3]
+    x0 = -Q0[1]
+    y0 = -Q0[2]
+    z0 = -Q0[3]
 
     # Extract the values from Q1
     w1 = Q1[0]
-    x1 = -Q1[1]
-    y1 = -Q1[2]
-    z1 = -Q1[3]
+    x1 = Q1[1]
+    y1 = Q1[2]
+    z1 = Q1[3]
 
     # Computer the product of the two quaternions, term by term
     Q0Q1_w = w0 * w1 - x0 * x1 - y0 * y1 - z0 * z1
@@ -94,7 +95,7 @@ def main():
     # Create the ROS subscriber and publisher
     state_pub   = rospy.Publisher("pupper_state", JointState, queue_size=1)
     pose_pub    = rospy.Publisher("pupper_pose", Pose, queue_size=1)
-    command_sub = rospy.Subscriber("pupper_commands", Float64MultiArray, commandCallback, queue_size=1)
+    command_sub = rospy.Subscriber("pupper_commands", Float64MultiArray, commandCallback, queue_size=1, tcp_nodelay=True)
 
     # Run at 500 Hz
     rate = rospy.Rate(500)
@@ -109,7 +110,7 @@ def main():
     # Flush first few messages of serial to avoid false fault signal
     for i in range(5):
         PupComm.store_robot_states(hardware_interface.get_robot_states())
-        time.sleep(.001)
+        time.sleep(.002)
 
     # Get initial orientation
     quaternion_init = PupComm.get_pupper_orientation()
@@ -120,10 +121,11 @@ def main():
     # Zero motors
     hardware_interface.zero_motors() 
     print("Zeroing Done")
-    hardware_interface.set_max_current(8.0) # Saturation (not fault)
-    k = 0
+    MAX_CURRENT = 8.0
+    hardware_interface.set_max_current(MAX_CURRENT) # Saturation (not fault)
     current_commands = [0]*12
     time.sleep(3.0)
+    k=0
     try:
         while not rospy.is_shutdown():
             command = joystick_interface.get_command()
@@ -170,37 +172,39 @@ def main():
             # -------- Send torques to pupper ---------- 
             # ------------------------------------------- 
             for i in range(12):
-                # Convert torque to current
+                # Convert torque to current in the Teensy frame
                 torque_cmd = WBC_trq_reordered[i] #Desired torque
                 q_ddot_des = WBC_dir_reordered[i] #Direction of desired acceleration
-
-                vel = PupComm.robot_states_["vel"][i]
+                vel = PupComm.robot_states_["vel"][i] #Already in teensy frame
                 current_commands[i] = trq_to_current(torque_cmd, q_ddot_des, vel)
 
-            # print("Reordered commands:")
-            if k%100 == 0:
-                # print("Desired torques : "+' '.join('{:.2f}'.format(f) for f in WBC_trq_reordered))
-                quat_rel = quaternion_relative(quaternion_init,quaternion) #relative quaternion
-                r = Rotation.from_quat([quat_rel[1],quat_rel[2],quat_rel[3],quat_rel[0]])
-                zyx = r.as_euler('zyx', degrees=True)
-                print("Euler: {:.2f} {:.2f} {:.2f}".format(zyx[2], zyx[1], zyx[0]))
+            # #error3d is used in WBC to control orientation (x, y, z)
+            # # quat_rel = quaternion_relative(quaternion_init,quaternion) #relative quaternion
+            # if k%200==0:
+            #     quat_rel = quaternion_relative(quaternion,quaternion_init) #relative quaternion
+            #     error3d = 1000.0 * np.array([quat_rel[1],quat_rel[2],quat_rel[3]])*np.sign(quat_rel[0])
+            #     print("Error 3d: {:.2f} {:.2f} {:.2f}".format(error3d[0], error3d[1], error3d[2]))
+            #     r = Rotation.from_quat([quat_rel[1],quat_rel[2],quat_rel[3],quat_rel[0]])
+            #     # print(Rotation.as_dcm(r))
+            #     rot_vec = r.as_rotvec()
+            #     print("Rot vec: {:.2f} {:.2f} {:.2f}".format(rot_vec[0],rot_vec[1],rot_vec[2]))
 
-            # print("Desired currents: "+' '.join('{:.2f}'.format(f) for f in current_commands))
-            # print("Desired dir.: ", WBC_dir_reordered)
-            current_commands = [0]*12
+            if np.any(np.array(current_commands) > MAX_CURRENT):
+                print("Motors saturating")
+                # print("Desired currents: "+' '.join('{:.2f}'.format(f) for f in current_commands))
+                
+            # current_commands = [0]*12
             hardware_interface.set_torque(current_commands) # misnomer until trq to current transformation is done on Teensy
             
-            # Sleep to maintain the desired frequency
-            rate.sleep()
-
             # Check if the pupper has faulted
             if PupComm.check_errors() == True: # Note: breaking here should be avoided since it causes a delay in the Teensy which affects fault handling
+                print("Joint positions: "+' '.join('{:.2f}'.format(f) for f in PupComm.robot_states_["pos"]))
+                print("Joint velocities: "+' '.join('{:.2f}'.format(f) for f in PupComm.robot_states_["vel"]))
                 # Ugly but simple way of shutting down the C++ node from this node
                 state_msg.position[0] = 0.012345
                 state_pub.publish(state_msg)
                 rospy.signal_shutdown("Pupper faulted.")
 
-            k += 1
             # Break loop when "q" is pressed
             if command.activate_event == 1:
                 hardware_interface.set_torque([0]*12)
@@ -209,8 +213,15 @@ def main():
                 state_pub.publish(state_msg)
                 rospy.signal_shutdown("Manual stop.")
 
+            # Sleep to maintain the desired frequency
+            rate.sleep()
+            k = k+1
+
     except KeyboardInterrupt:
         hardware_interface.set_torque([0]*12) # Zero torques when quit
+        state_msg.position[0] = 0.012345
+        state_pub.publish(state_msg)
+        rospy.signal_shutdown("Manual stop.")
         print("Stopping motors.")
     finally:
         hardware_interface.set_torque([0]*12) # Zero torques when quit

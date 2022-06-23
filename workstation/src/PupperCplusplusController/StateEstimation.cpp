@@ -19,6 +19,7 @@ float estimateHeight(PupperWBC& WBC, std::array<bool, 4> feet_in_contact)
     int num_contacts = std::accumulate(feet_in_contact.begin(), feet_in_contact.end(), 0);
     float max_z = 0.0;
     static float height; // height from floor to COM base
+    double alpha = 0.367; // Low pass filter coefficient (500hz cutoff with Ts = 2 ms)
 
     Vector3d r_bl = Vector3d::Zero(3);
     Vector3d r_br = Vector3d::Zero(3);
@@ -46,7 +47,8 @@ float estimateHeight(PupperWBC& WBC, std::array<bool, 4> feet_in_contact)
         max_z = max(max_z,(float)-r_fr(2));
     }
 
-    height = max((float)0.0, max_z);
+    height = (alpha)*height + (1-alpha)*max((float)0.0, max_z);
+    // std::cout << "Instantant Height: " << max((float)0.0, max_z) << std::endl;
     return height;
 
     // Since the base frame is aligned with the prismatic floating joints (which are aligned with world frame), the z axis should be the height. 

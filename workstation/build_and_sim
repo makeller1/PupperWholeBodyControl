@@ -2,8 +2,10 @@
 #This is a bash script to build the code and run the Gazebo simulation
 
 cd ~/WBC_catkin_ws/src/PupperWholeBodyControl/workstation/plugins/build
-catkin build # builds a catkin package containing all cpp except gazebo plugins 
+#catkin build # builds a catkin package containing all cpp except gazebo plugins 
+catkin build -DCMAKE_BUILD_TYPE=Release # Release mode
+#catkin build -DCMAKE_BUILD_TYPE=Debug # Debug mode
 cmake ..
-make -j
+make -j 
 
 roslaunch workstation load_pupper.launch

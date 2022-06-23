@@ -38,7 +38,7 @@ float s_mag_z;
 ICM_20948_I2C myICM;  //create an ICM_20948_I2C object
 
 // Quaternions
-std::array<float,4> quats = {1.0f, 0.0f, 0.0f, 0.0f};
+std::array<float,4> quats = {1.0f, 0.0f, 0.0f, 0.0f}; // w, x, y, z
 
 std::array<float, 4> MadgwickUpdate(float gx, float gy, float gz, float ax, float ay, float az, 
                     float mx, float my, float mz, float q0, float q1, float q2, float q3, float dt);
@@ -72,7 +72,7 @@ void setup(void) {
     delay(125);
     digitalWrite(13, LOW);
     delay(125);
-    Beep(i, 0, 3);
+    Beep(i, 0, 2);
   }
 
   // Read calibration parameters from EEPROM
@@ -106,21 +106,6 @@ void setup(void) {
         initialized = true;
       }
     }
-    // Set up Digital Low-Pass Filter configuration
-    ICM_20948_dlpcfg_t myDLPcfg;            // Similar to FSS, this uses a configuration structure for the desired sensors
-    myDLPcfg.a = acc_d5bw7_n8bw3; // -3 db bandwidth is 5.7 hz and nyquist bandwidth is 8.3 hz
-    myDLPcfg.g = gyr_d361bw4_n376bw5; // -3 db bandwidth is 361.4 hz and nyquist bandwidth is 376.5 hz
-                                            
-    myICM.setDLPFcfg( (ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), myDLPcfg);
-    if( myICM.status != ICM_20948_Stat_Ok)
-    {
-      // Serial.print(F("setDLPcfg returned: "));
-      Serial.println(myICM.statusString());
-    }
-    // Enable DLPF
-    myICM.enableDLPF( ICM_20948_Internal_Acc, true );
-    myICM.enableDLPF( ICM_20948_Internal_Gyr, true );
-
     //////////////////////////////// END IMU SETUP ///////////////////////////////////////////
   }
 
@@ -134,6 +119,7 @@ void setup(void) {
   options.positions = true;
   options.velocities = true;
   options.currents = true; // last actual current
+  options.mag = false; // magnitude of normalized magnetometer readings
   if (!AHRS_ENABLED){
     options.quaternion = false;
   }
@@ -160,6 +146,7 @@ void loop()
     }
     if (r.trq_mode_set)
     {
+      interpreter.Flush();
       drive.SetTorqueControl();
     }
     if (r.new_max_current) 
@@ -205,11 +192,6 @@ void loop()
   // Filter IMU data and send to DriveSystem
   if (AHRS_ENABLED)
   {
-    if(myICM.dataReady() && micros() - last_command_ts >= CONTROL_DELAY)
-    {
-      // Read IMU data (takes 0.98 ms)
-      myICM.getAGMT();
-
       // Update filter
       dt = (micros() - last_imu_update)/1000000.0f; 
       quats = MadgwickUpdate(myICM.gyrX()-b_gyr_x, myICM.gyrY()-b_gyr_y, myICM.gyrZ()-b_gyr_z, myICM.accX(), myICM.accY(), myICM.accZ(), 
@@ -218,6 +200,10 @@ void loop()
       // Send quaternion values to DriveSystem
       drive.SetQuaternions(quats[0],quats[1],quats[2],quats[3]);
       last_imu_update = micros();
+    if(myICM.dataReady() && micros() - last_command_ts >= CONTROL_DELAY)
+    {
+      // Read IMU data (takes 0.98 ms)
+      myICM.getAGMT();
     }
   }
 
@@ -234,6 +220,9 @@ void loop()
       Serial << "Parameters: b_mag : "<< params[3] << ", " << params[4] << ", " << params[5] << endl;
       Serial << "Parameters: s_mag : "<< params[6] << ", " << params[7] << ", " << params[8] << endl; 
       Serial << "Normalized magnetometer magnitude: " << meanmag << endl;
+      Serial << "Gyro measurements: " << myICM.gyrX() << " " << myICM.gyrY() << " " << myICM.gyrZ() << endl;
+      Serial << "Mag measurements: " << myICM.magX() << " " <<   myICM.magY() << " " <<  myICM.magZ() << endl;
+      Serial << "Acc measurements: " << myICM.accX() << " " <<  myICM.accY() << " " <<  myICM.accZ() << endl;
       last_cal_print_ts = micros();
     }
   }
@@ -241,6 +230,10 @@ void loop()
   // Send measurements to workstation
   if (send_robot_states){
     if (micros() - last_print_ts >= OBSERVE_DELAY) {
+      if (options.mag){
+      // Check on magnetometer calibration quality
+      drive.m_xyz_magnitude = CheckCalMag({myICM.magX(), myICM.magY(), myICM.magZ()}, ReadParams());
+      }
       drive.PrintMsgPackStatus(options);
       last_print_ts = micros();
     }

@@ -11,6 +11,9 @@ find_package(catkin REQUIRED COMPONENTS roscpp workstation)
 # So that we have a consistent quaternion definition
 find_package(Eigen3 REQUIRED)
 
+# For profiling
+find_package(ignition-common3 QUIET REQUIRED COMPONENTS profiler)
+
 # Find Gazebo
 find_package(gazebo REQUIRED)
 link_directories(${GAZEBO_LIBRARY_DIRS} /usr/lib/x86_64-linux-gnu/)
@@ -26,4 +29,6 @@ target_link_libraries(pupper_plugin
     ${catkin_LIBRARIES} 
     ${RBDL_LIBRARY}
     ${RBDL_URDFReader_LIBRARY}
+    #${IGNITION-COMMON_LIBRARIES} # For profiling
+    ignition-common3::profiler # For profiling
 )

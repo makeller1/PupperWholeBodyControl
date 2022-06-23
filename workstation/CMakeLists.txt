@@ -59,15 +59,22 @@ add_library(${PROJECT_NAME}
   src/PupperCplusplusController/PupperWBC.cpp
   src/PupperCplusplusController/WBCTaskMaster.cpp
   src/PupperCplusplusController/StateEstimation.cpp
+  src/PupperCplusplusController/NumpyLogger.cpp
+)
+add_library(cnpy SHARED IMPORTED GLOBAL)
+
+set_target_properties(${PROJECT_NAME} 
+cnpy PROPERTIES IMPORTED_LOCATION /usr/local/lib/libcnpy.so
 )
 
 # Link all necessary libraries to our library
 target_link_libraries(${PROJECT_NAME}
   ${catkin_LIBRARIES}
-  osqp::osqp 
+  osqp::osqp
   ${RBDL_LIBRARY} 
   ${RBDL_URDFReader_LIBRARY}
 )
+target_link_libraries(${PROJECT_NAME} cnpy)
 
 ###########
 ## Build ##
@@ -82,13 +89,19 @@ include_directories(
 
 # Create executable files and link their dependencies
 # PupperController used for debugging the WBC
-add_executable(PupperController 
-  src/PupperCplusplusController/PupperControl.cpp
-)
-target_link_libraries(PupperController ${PROJECT_NAME})
+#add_executable(PupperController 
+#  src/PupperCplusplusController/PupperControl.cpp
+#)
+#target_link_libraries(PupperController ${PROJECT_NAME})
 
 # ROS node for controlling the real life pupper
 add_executable(PupperNode
   src/PupperCplusplusController/pupper_ros_node.cpp
 )
 target_link_libraries(PupperNode ${PROJECT_NAME})
+
+# ROS node for testing rostopic issues
+add_executable(TestNode
+  src/PupperCplusplusController/test_of_ros_node.cpp
+)
+target_link_libraries(TestNode ${PROJECT_NAME})

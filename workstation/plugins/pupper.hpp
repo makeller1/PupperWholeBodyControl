@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <array>
+#include <string>
 #include <gazebo/gazebo.hh>
 #include <gazebo/physics/physics.hh>
 #include "Eigen/Dense"
@@ -83,6 +84,17 @@ private:
     void applyTorques_();
     TaskMaster taskmaster_;                     // Sets tasks and updates tasks for a specific goal
     double start_time;                           // start time of simulation ms
+
+    // Testing contact forces
+    void logContactForces_();
+    const std::array<std::string,4> link_names_ = {
+    "back_left_lower_link",
+    "back_right_lower_link",
+    "front_left_lower_link",
+    "front_right_lower_link"
+    };
+    std::array<Eigen::Vector3d, 4> contact_forces_body_; // contact forces in link frame
+    std::array<Eigen::Vector3d, 4> contact_forces_world_; // contact forces in world frame
 };
 
 

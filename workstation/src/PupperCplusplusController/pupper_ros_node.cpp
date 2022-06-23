@@ -16,11 +16,11 @@ namespace {
     Eigen::Vector3d body_pos_(3);
     Eigen::Quaterniond robot_quaternion_;
     Eigen::Quaterniond initial_quaterion_;
+    uint32_t msg_seq_; // message number
     bool joint_init = false;
     bool pose_init  = false;
     bool shutdown = false;
     bool updated = false; // has a new message been received?
-    double time_last_callback = 0.0; 
 }
 
 // This is called every time we receive a message from the Python node
@@ -34,13 +34,10 @@ void pupperStateCallBack(const sensor_msgs::JointStateConstPtr &msg){
         }
         std::cout << std::endl;
     }
-    // auto a = msg->header.seq; // message count
+    msg_seq_ = msg->header.seq;
     // Record the robot data
     std::copy(msg->position.begin(), msg->position.end(), joint_positions_.data());
     std::copy(msg->velocity.begin(), msg->velocity.end(), joint_velocities_.data());
-    // std::cout << "message number: " << msg->position[11] << std::endl;
-    // std::cout << "dt callback (ms): " << (ros::Time::now().toSec() - time_last_callback)*1000.0f << std:: endl;
-    // time_last_callback = ros::Time::now().toSec();
     // Ugly but simple way of shutting down this node from the python node
     if (msg->position[0] == 0.012345){
         shutdown = true;
@@ -62,7 +59,7 @@ void pupperPoseCallBack(const geometry_msgs::PoseConstPtr &msg){
         ROS_INFO("Initial quaternion received: [%.2f, (%.2f, %.2f, %.2f)]", 
         initial_quaterion_.w(), initial_quaterion_.x(), initial_quaterion_.y(), initial_quaterion_.z());
     }
-    // updated = true;
+    updated = true;
 }
 
 int main(int argc, char** argv){
@@ -87,8 +84,8 @@ int main(int argc, char** argv){
     GoalName goal = GoalName::GETUP;
     taskmaster_.setGoal(goal, Pup, contacts);
 
-    // Run controller at 500 Hz
-    ros::Rate rate(500);
+    // Run controller at 1000 Hz
+    ros::Rate rate(1000);
 
     // Zero the globals
     body_pos_.setZero();
@@ -122,26 +119,27 @@ int main(int argc, char** argv){
         ros::spinOnce();
 
         if (updated){
-            auto time_main_loop_start = ros::Time::now().toSec();
+            static auto time_main_loop_start = ros::Time::now().toSec();
             // Offset the quaternion from our initial state
-            Eigen::Quaterniond correct_quat = initial_quaterion_ * robot_quaternion_.conjugate();
+            Eigen::Quaterniond correct_quat = initial_quaterion_.conjugate() * robot_quaternion_;
             // ROS_INFO("Corrected quaternion: [%.2f, (%.2f, %.2f, %.2f)]", 
             // correct_quat.w(), correct_quat.x(), correct_quat.y(), correct_quat.z());
 
-            // Print RPY values
+            // Print orientation error
             VectorNd error3d;
             error3d = correct_quat.vec() * correct_quat.w()/abs(correct_quat.w());
             std::cout << "error3d: " << 1000.0 * error3d.transpose() << std::endl;
 
             // Update the robot state
-            Pup.updateController(joint_positions_, joint_velocities_, correct_quat, contacts, time_now);
+            Eigen::Vector3d ang_velocity; // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! get from IMU gyro
+            Pup.updateController(joint_positions_, joint_velocities_, correct_quat, ang_velocity, contacts, time_now);
 
             // Update robot height
             robot_pos[2] = estimateHeight(Pup, contacts);
-            std::cout << "\n \n \n" << "Estimated height: " << robot_pos[2] <<  std::endl;
 
             // Update the tasks states
-            Pup.updateBodyPosTask("COM_POSITION", robot_pos);
+            Pup.updateBodyPosTask("COM_HEIGHT", robot_pos);
+            Pup.updateBodyPosTask("COM_LATERAL_POS", robot_pos);
             Pup.updateBodyOriTask("COM_ORIENTATION", correct_quat);
             Pup.updateJointTask("JOINT_ANGLES", Pup.getJointPositions().segment(6,12));
             Pup.updateBodyPosTask("BACK_LEFT_FOOT_POS",   Pup.getRelativeBodyLocation("back_left_foot"));
@@ -155,18 +153,21 @@ int main(int argc, char** argv){
             // Run the IHWBC
             array<float,12> tau;
             try{
-                tau = Pup.calculateOutputTorque(); // !!!!!!!!!!!!!!!!!!!!
+                tau = Pup.calculateOutputTorque(); 
             }
             catch(std::runtime_error& e){
                 std::cout << e.what() << std::endl;
+                throw(std::runtime_error(e.what()));
+                // TODO: Engage motor braking
             }
             array<float,12> q_ddot_des = Pup.getOptimalAccel();
             
-            // Print task information
+            // Log task data to numpy logger
             Pup.printDiag(); 
 
             // Shutdown if python node asks
             if (shutdown == true){
+                Pup.np_logger.saveData();
                 ros::shutdown();
             }
 
@@ -175,10 +176,10 @@ int main(int argc, char** argv){
             std::copy(q_ddot_des.begin(), q_ddot_des.end(), command_msg.data.data() + tau.size());
             RobotCommandPub.publish(command_msg);
             updated = false;
-            std::cout << "dt (ms): " << (time_now-time_last) * 1000.0f << std::endl;
+            std::cout << "dt since last run (ms): " << (time_now-time_last) * 1000.0f << std::endl;
             time_last = time_now;
-            std::cout << "message number: " << joint_positions_[11] << std::endl;
-            std::cout << "traverse MAIN LOOP (ms): " << (ros::Time::now().toSec()-time_main_loop_start) * 1000.0f << std::endl;
+            // Log time required to run wbc
+            Pup.np_logger.logScalars({"wbc_ms"},{(ros::Time::now().toSec()-time_main_loop_start) * 1000.0f});
         }
     rate.sleep();
     }

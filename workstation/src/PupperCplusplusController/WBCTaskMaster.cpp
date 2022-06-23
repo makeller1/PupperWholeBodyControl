@@ -10,8 +10,7 @@ using std::endl;
 using std::string;
 
 TaskMaster::TaskMaster(){
-    current_goal_ = GoalName::STAND;
-    cout << "TASK MASTER INITIALIZED" << endl;
+    current_goal_ = GoalName::GETUP;
 }
 
 void TaskMaster::setGoal(GoalName goal, PupperWBC& WBC_, std::array<bool,4>& feet_in_contact){
@@ -79,7 +78,7 @@ void TaskMaster::setGoal(GoalName goal, PupperWBC& WBC_, std::array<bool,4>& fee
 
             Eigen::Vector3d foot_pos_Kp = {100, 100, 0}; 
             Eigen::Vector3d foot_pos_Kd = {20, 20, 0}; 
-            float foot_pos_w  = 1; // .01
+            float foot_pos_w  = 1000; // 1
 
             // Keep the back left foot in place
             static Task BLFootTask;
@@ -108,8 +107,8 @@ void TaskMaster::setGoal(GoalName goal, PupperWBC& WBC_, std::array<bool,4>& fee
             FLFootTask.task_weight = foot_pos_w;
             FLFootTask.active_targets = {true, true, true}; 
             FLFootTask.pos_target << 0.08, 0.045, -0.08; // .075
-            FLFootTask.Kp = foot_pos_Kp;
-            FLFootTask.Kd = foot_pos_Kd;
+            FLFootTask.Kp << 2000, 2000, 2000;
+            FLFootTask.Kd << 20, 20, 20;
 
             // Keep the front right foot in place
             static Task FRFootTask;
@@ -149,38 +148,46 @@ void TaskMaster::setGoal(GoalName goal, PupperWBC& WBC_, std::array<bool,4>& fee
             // WBC parameters
             WBC_.lambda_q = 0.001; 
             WBC_.rf_desired = VectorNd::Zero(12);
-            WBC_.lambda_rf_z = 0; // Minimize impacts
-            WBC_.lambda_rf_xy = 0; 
+            WBC_.lambda_rf_z = 0; // Minimize normal reaction force
+            WBC_.lambda_rf_xy = 0; // Minimize tangential reaction force
             WBC_.w_rf_xy = 0; // Tracking weight
             WBC_.w_rf_z = 0;
-            WBC_.mu = .1;
+            WBC_.mu = 0.3;
 
             // Manually prescribe which feet are in contact (BL,BR,FL,FR)
             feet_in_contact = {true,true,true,true};
 
-            // Task for Body center of mass to be 8 cm high
-            static Task CoM_Position_Task;
-            CoM_Position_Task.type    = BODY_POS;
-            CoM_Position_Task.body_id = "bottom_PCB";
-            CoM_Position_Task.task_weight = 100; // 10
-            CoM_Position_Task.active_targets = {true, true, true};   
-            CoM_Position_Task.pos_target << 0, 0, 0.08;
-            CoM_Position_Task.Kp << 20,20,100; // zeros for Kp and Kd indicate we want the acceleration to be zero (20,5), (100,10)
-            CoM_Position_Task.Kd << 5,5,10;
-            CoM_Position_Task.x_ddot_ff << 0, 0, 0;
+            // Task for body origin be 8 cm high
+            static Task CoM_Height_Task;
+            CoM_Height_Task.type    = BODY_POS;
+            CoM_Height_Task.body_id = "bottom_PCB";
+            CoM_Height_Task.task_weight = 100; // 10
+            CoM_Height_Task.active_targets = {false, false, true};   
+            CoM_Height_Task.pos_target << 0, 0, 0.08;
+            CoM_Height_Task.Kp << 0,0,100; 
+            CoM_Height_Task.Kd << 0,0,10;
+
+            // Task for horizontal body position
+            static Task CoM_Lateral_Pos_Task;
+            CoM_Lateral_Pos_Task.type    = BODY_POS;
+            CoM_Lateral_Pos_Task.body_id = "bottom_PCB";
+            CoM_Lateral_Pos_Task.task_weight = 10; // 10
+            CoM_Lateral_Pos_Task.active_targets = {true, true, false};   
+            CoM_Lateral_Pos_Task.pos_target << 0, 0, 0;
+            CoM_Lateral_Pos_Task.Kp << 50,50,0; 
+            CoM_Lateral_Pos_Task.Kd << 30,30,0;
 
             // Task for Body center of mass to be flat
             static Task CoM_Orientation_Task;
             CoM_Orientation_Task.type    = BODY_ORI;
             CoM_Orientation_Task.body_id = "bottom_PCB";
-            CoM_Orientation_Task.task_weight = 100; // 100
+            CoM_Orientation_Task.task_weight = 1.0; // 50, 1.0
             CoM_Orientation_Task.quat_target = Eigen::Quaternion<double>::Identity();
             CoM_Orientation_Task.active_targets = {true, true, true};
-            float com_ori_Kp = 1000;
-            float com_ori_Kd = 100;
+            float com_ori_Kp = 1000; // 1000 (sim)
+            float com_ori_Kd = 10; // 100 (sim)
             CoM_Orientation_Task.Kp << com_ori_Kp, com_ori_Kp, com_ori_Kp; 
             CoM_Orientation_Task.Kd << com_ori_Kd, com_ori_Kd, com_ori_Kd; 
-            CoM_Orientation_Task.x_ddot_ff << 0, 0, 0;
 
             static Task JointPositionTask; 
             JointPositionTask.type = JOINT_POS;
@@ -194,11 +201,11 @@ void TaskMaster::setGoal(GoalName goal, PupperWBC& WBC_, std::array<bool,4>& fee
             JointPositionTask.Kp << 100,0,0; // The three gains are applied to each leg 
             JointPositionTask.Kd << 10,0,0; // When tuning remember: tau = M*q_ddot + ... and q_dotdot = Kp (theta-theta_d) + Kd(omega) 
 
+            // Enforce zero acceleration of contacting feet
             Eigen::Vector3d foot_pos_Kp = {0, 0, 0}; // zeros indicate desired acceleration = zero 
             Eigen::Vector3d foot_pos_Kd = {0, 0, 0};   // zeros indicate desired acceleration = zero 
-            float foot_pos_w  = 100;
+            float foot_pos_w  = 10000;
 
-            // Enforce zero acceleration of contacting feet
             static Task BLFootTask;
             BLFootTask.type = BODY_POS;
             BLFootTask.body_id = "back_left_foot";
@@ -230,8 +237,9 @@ void TaskMaster::setGoal(GoalName goal, PupperWBC& WBC_, std::array<bool,4>& fee
             FRFootTask.active_targets = {true, true, true};  
             FRFootTask.Kp << foot_pos_Kp;
             FRFootTask.Kd << foot_pos_Kd;
-
-            WBC_.addTask("COM_POSITION", &CoM_Position_Task);
+            
+            WBC_.addTask("COM_HEIGHT", &CoM_Height_Task);
+            WBC_.addTask("COM_LATERAL_POS", &CoM_Lateral_Pos_Task);
             WBC_.addTask("COM_ORIENTATION", &CoM_Orientation_Task);
             WBC_.addTask("JOINT_ANGLES", &JointPositionTask);
 
@@ -260,8 +268,9 @@ void TaskMaster::updateGoalTasks(PupperWBC& WBC_, const double& time_ms)
         case GoalName::GETUP:
         {
             // Update the desired COM_Position as the average of the support polygon edges (contacts)
+            double offset = 0.07; // offset in x (m) (.05)
             static Vector3_t support_avg_lp; // IIR low pass filtered support average
-            double lp_coeff = 0.81; // 200 hz cutoff with Ts = 1000 Hz
+            double lp_coeff = 0.0; // 200 hz cutoff with Ts = 1000 Hz (0.81)
             Vector3_t support_avg = Vector3_t::Zero(3); // Instantaneous support average
             
             // Compute average of support polygon edges
@@ -273,8 +282,8 @@ void TaskMaster::updateGoalTasks(PupperWBC& WBC_, const double& time_ms)
             // Low pass to remove derivative impulses due to moving contacts
             support_avg_lp = lp_coeff*support_avg_lp + (1-lp_coeff)*support_avg;
             
-            WBC_.getTask("COM_POSITION")->pos_target(0) = support_avg_lp(0);
-            WBC_.getTask("COM_POSITION")->pos_target(1) = support_avg_lp(1); 
+            WBC_.getTask("COM_LATERAL_POS")->pos_target(0) = support_avg_lp(0) + offset;
+            WBC_.getTask("COM_LATERAL_POS")->pos_target(1) = support_avg_lp(1); 
             break;
         }
         case GoalName::STAND:

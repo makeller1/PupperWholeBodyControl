@@ -5,6 +5,7 @@
 #include <iostream>
 #include <math.h>
 #include <string>
+#include <chrono>
 
 using std::cout;
 using std::endl;
@@ -15,6 +16,23 @@ using std::string;
 static double angleDiff(double angle1, double angle2){
     return fmod(angle1 - angle2 + M_PI, 2*M_PI) - M_PI;
 }
+
+// start timer (ms)
+double tic(int mode=0) {
+    static std::chrono::_V2::system_clock::time_point t_start;
+    
+    if (mode==0)
+        t_start = std::chrono::high_resolution_clock::now();
+    else {
+        auto t_end = std::chrono::high_resolution_clock::now();
+        double t_delta = (t_end-t_start).count()*1E-6;
+        std::cout << "Elapsed time is " << t_delta << " ms\n";
+        return t_delta;
+    }
+    return 0.0;
+}
+// return elapsed time (ms)
+double toc() { return tic(1); }
 
 namespace gazebo
 {
@@ -90,7 +108,7 @@ void PupperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
     this->updateConnection_ = event::Events::ConnectWorldUpdateBegin(std::bind(&PupperPlugin::onUpdate, this, std::placeholders::_1));
     
     // Set up update rate variables
-    update_interval_  = 0.002;  // 500Hz
+    update_interval_  = 1;  // (ms) 500Hz
     last_update_time_ = 0.0;
 
     // Set up the connection to Gazebo topics
@@ -113,6 +131,7 @@ void PupperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
 // Called on every simulation time step
 void PupperPlugin::onUpdate(const common::UpdateInfo &_info){
     
+    static double dt_wbc = 0.0; // ms elapsed time to run wbc (update model, update problem, and solve)
     simtime_ = _info.simTime.Double()*1e3;
 
     // First 5 seconds
@@ -124,25 +143,48 @@ void PupperPlugin::onUpdate(const common::UpdateInfo &_info){
         std::fill(control_torques_.begin(), control_torques_.end(), 0);
     }
     //Manage publisher update rate and run WBC control loop
-    else if (simtime_ - last_update_time_ > update_interval_){
+    else if (simtime_ - last_update_time_ >= std::max(update_interval_,dt_wbc)){
+    // else if (simtime_ - last_update_time_ >= update_interval_){
+        static double k = 1;
+        static double mean_time = 0.0;
+
         // Update tasks to accomplish goal
         taskmaster_.updateGoalTasks(WBC_, simtime_);
 
         // Get the robot state from the simulation
         updateBody_();
         updateJoints_();
+
+        tic();
         // Copy that robot state into the Whole Body Controller
         updateController_();
+
         // Calculate control commands
         control_torques_ = WBC_.calculateOutputTorque();
-        // cout << "WARNING: WBC torques are not passed to pupper!" << endl;
-        // setJointPositions(init_angles); // WBC torques are not passed to pupper!
 
-        WBC_.printDiag();
+        // Print WBC diagnostics
+        WBC_.printDiag(); 
+        dt_wbc = toc();
+        mean_time = (k-1)/(k)*mean_time + (1/k)*dt_wbc;
+        cout << "Mean run time: " << mean_time << "\n \n \n " << endl;
+
+        // Log time required to run wbc
+        WBC_.np_logger.logScalars({"wbc_ms"},{dt_wbc});
+
+        // Log gazebo contact forces 
+        logContactForces_();
+
+        if ((int)k == 1){
+            // do not delay for initialization
+            dt_wbc = 0.0;
+        }
+        k = k + 1;
         last_update_time_ = simtime_;
-        cout << "  " << endl << endl << endl;
     }
-
+    // Save data to numpy format every second
+    if ((int)simtime_ % 1000 == 0){
+        WBC_.np_logger.saveData();
+    }
     // This needs to be outside the loop or else the joints will go dead on non-update iterations
     applyTorques_();
 }
@@ -228,23 +270,31 @@ void PupperPlugin::updateJoints_(){
 void PupperPlugin::updateBody_(){
     auto body_pose = model_->WorldPose();
     auto body_lin_vel  = model_->WorldLinearVel();
-    auto body_ang_vel = model_->WorldAngularVel();
-    
+
     // Measured with Gazebo
     // body_COM_[0] = body_pose.Pos().X();
     // body_COM_[1] = body_pose.Pos().Y();
     body_COM_[2] = body_pose.Pos().Z();
-
-    cout << "Z measured : " << body_pose.Pos().Z() << endl;
+    // cout << "Z measured : " << body_pose.Pos().Z() << endl;
 
     body_quat_.x() = body_pose.Rot().X();
     body_quat_.y() = body_pose.Rot().Y();
     body_quat_.z() = body_pose.Rot().Z();
     body_quat_.w() = body_pose.Rot().W();
 
-    body_COM_ang_vel_.x() = body_ang_vel.X();
-    body_COM_ang_vel_.y() = body_ang_vel.Y();
-    body_COM_ang_vel_.z() = body_ang_vel.Z();
+    // Rotate gazebo ang vel to body frame
+    Eigen::Vector3d world_ang_vel;
+    auto R_world_to_body = body_quat_.toRotationMatrix();
+
+    world_ang_vel.x() = model_->WorldAngularVel().X();
+    world_ang_vel.y() = model_->WorldAngularVel().Y();
+    world_ang_vel.z() = model_->WorldAngularVel().Z();
+
+    auto body_ang_vel = R_world_to_body.transpose()*world_ang_vel;
+
+    body_COM_ang_vel_.x() = body_ang_vel.x();
+    body_COM_ang_vel_.y() = body_ang_vel.y();
+    body_COM_ang_vel_.z() = body_ang_vel.z();
 
     body_COM_lin_vel_.x() = body_lin_vel.X();
     body_COM_lin_vel_.y() = body_lin_vel.Y();
@@ -253,12 +303,14 @@ void PupperPlugin::updateBody_(){
 
 // Tell the controller the current state of the robot
 void PupperPlugin::updateController_(){
-    // WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, feet_in_contact_, simtime_/1e3);
-    WBC_.updateController(joint_positions_, joint_velocities_, body_quat_, feet_in_contact_manual,simtime_/1e3);
-    cout << "Z measured : " << body_COM_[2] << endl;
+    // WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, feet_in_contact_, simtime_/1000.0f);
+    // body_COM_ang_vel_.setZero(); 
+    WBC_.updateController(joint_positions_, joint_velocities_, body_quat_, body_COM_ang_vel_, feet_in_contact_manual,simtime_/1000.0f);
+    // cout << "Z measured : " << body_COM_[2] << endl;
     body_COM_[2] = estimateHeight(WBC_, feet_in_contact_manual);
-    cout << "Z estimate : " << body_COM_[2] << endl;
-    WBC_.updateBodyPosTask("COM_POSITION", body_COM_);
+    // cout << "Z estimate : " << body_COM_[2] << endl;
+    WBC_.updateBodyPosTask("COM_HEIGHT", body_COM_);
+    WBC_.updateBodyPosTask("COM_LATERAL_POS", body_COM_);
     WBC_.updateBodyOriTask("COM_ORIENTATION", body_quat_);
     VectorNd jointPos(12);
     std::copy(joint_positions_.data(), joint_positions_.data() + 12, jointPos.data());
@@ -269,26 +321,75 @@ void PupperPlugin::updateController_(){
     WBC_.updateBodyPosTask("FRONT_RIGHT_FOOT_POS", WBC_.getRelativeBodyLocation("front_right_foot"));
 }
 
+void PupperPlugin::logContactForces_(){
+    for (int i = 0; i < 4; i++){
+        auto link_ptr = model_->GetLink(link_names_[i]);
+        auto link_pose = link_ptr->WorldPose();
+        ignition::math::v6::Vector3d force;
+        force.Set(contact_forces_body_[i](0), contact_forces_body_[i](1), contact_forces_body_[i](2));
+        auto force_world = link_pose.Rot().RotateVector(force);
+        contact_forces_world_[i] << force_world.X(), force_world.Y(), force_world.Z();
+    }
+    WBC_.np_logger.logVectorXd("Fr_gazebo_bl",contact_forces_world_[0]);
+    WBC_.np_logger.logVectorXd("Fr_gazebo_br",contact_forces_world_[1]);
+    WBC_.np_logger.logVectorXd("Fr_gazebo_fl",contact_forces_world_[2]);
+    WBC_.np_logger.logVectorXd("Fr_gazebo_fr",contact_forces_world_[3]);
+}
 
 // =========================================================================================
 // ----------------------------       SUBSCRIBER CALLBACK       ----------------------------
 // =========================================================================================
 
 void PupperPlugin::contactCallback_(ConstContactsPtr &_msg){
-    
+    // // Detect feet in contact
+    // // Measure reaction forces (unfinished)
     static const array<string,4> collision_names = {
         "pupper::back_left_lower_link::",
         "pupper::back_right_lower_link:",
         "pupper::front_left_lower_link:",
-        "pupper::front_right_lower_link",
+        "pupper::front_right_lower_link"
     };
-
-    std::fill(feet_in_contact_.begin(), feet_in_contact_.end(), false);
+    // std::fill(feet_in_contact_.begin(), feet_in_contact_.end(), false);
     for (auto C : _msg->contact()){
         if (C.has_collision1())
             for (size_t i = 0; i < 4; i++)
                 if (collision_names[i] == C.collision1().substr(0, 30))
-                    feet_in_contact_[i] = true;
+                {
+            //         feet_in_contact_[i] = true;
+                    contact_forces_body_[i].setZero();
+                }
+
+            for (auto W : C.wrench()){
+                // Read topic in terminal: gz topic -e /gazebo/pupper_world/physics/contacts
+                // W.body_1_name().substr
+                for (size_t i = 0; i < 4; i++){
+                    if (collision_names[i] == W.body_1_name().substr(0, 30)){
+                        contact_forces_body_[i] << W.body_1_wrench().force().x(), W.body_1_wrench().force().y(), W.body_1_wrench().force().z();
+                        // auto link_ptr = model_->GetLink(link_names_[i]);
+                        // cout << "link_ptr is null?: " << std::to_string(link_ptr == NULL) << endl;
+                        // auto link_pose = link_ptr->WorldPose();
+                        // ignition::math::v6::Vector3d force;
+                        // force.Set(W.body_1_wrench().force().x(), W.body_1_wrench().force().y(), W.body_1_wrench().force().z());
+                        // auto force_world = link_pose.Rot().RotateVectorReverse(force);
+                        // cout << "Body: " << W.body_1_name() << "\n";
+                        // cout << "Force world: " << force_world << endl;
+                        // contact_forces_world_[i] << force_world.X(), force_world.Y(), force_world.Z();
+                    }
+
+                }
+                // auto id = W.body_1_id();
+                // uint32_t id_int = id;
+                // cout << "id from wrench: " << std::to_string(id_int) << endl;
+                // // auto link_ptr = model_->GetLinkById(id_int);
+                // auto link_ptr = model_->GetLink("front_right_lower_link");
+                // cout << "link_ptr is null?: " << std::to_string(link_ptr == NULL) << endl;
+                
+                // cout << "Body: " << W.body_1_name() << "\n";
+                // cout << "Force x:  " << W.body_1_wrench().force().x() << " \n";
+                // cout << "Force y: " << W.body_1_wrench().force().y() << " \n";
+                // cout << "Force z: " << W.body_1_wrench().force().z() << endl;
+                // cout << "Force world: " << force_world << endl;
+            }
     }
 
     // // Set targets for foot tasks dependent on contact
