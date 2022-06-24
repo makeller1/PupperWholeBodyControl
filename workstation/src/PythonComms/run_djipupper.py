@@ -97,8 +97,8 @@ def main():
     pose_pub    = rospy.Publisher("pupper_pose", Pose, queue_size=1)
     command_sub = rospy.Subscriber("pupper_commands", Float64MultiArray, commandCallback, queue_size=1, tcp_nodelay=True)
 
-    # Run at 500 Hz
-    rate = rospy.Rate(500)
+    # Run at 1000 Hz
+    rate = rospy.Rate(1000)
 
     # Setup interfaces
     hardware_interface = HardwareInterface.HardwareInterface(port=SERIAL_PORT)
@@ -193,7 +193,7 @@ def main():
                 print("Motors saturating")
                 # print("Desired currents: "+' '.join('{:.2f}'.format(f) for f in current_commands))
                 
-            # current_commands = [0]*12
+            current_commands = [0]*12
             hardware_interface.set_torque(current_commands) # misnomer until trq to current transformation is done on Teensy
             
             # Check if the pupper has faulted

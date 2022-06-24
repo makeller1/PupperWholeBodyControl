@@ -303,22 +303,27 @@ void PupperPlugin::updateBody_(){
 
 // Tell the controller the current state of the robot
 void PupperPlugin::updateController_(){
-    // WBC_.updateController(joint_positions_, joint_velocities_, body_COM_, body_quat_, feet_in_contact_, simtime_/1000.0f);
-    // body_COM_ang_vel_.setZero(); 
+    // body_COM_ang_vel_.setZero(); // Remove effect of body ang. vel. on j_dot_q_dot term
     WBC_.updateController(joint_positions_, joint_velocities_, body_quat_, body_COM_ang_vel_, feet_in_contact_manual,simtime_/1000.0f);
-    // cout << "Z measured : " << body_COM_[2] << endl;
-    body_COM_[2] = estimateHeight(WBC_, feet_in_contact_manual);
-    // cout << "Z estimate : " << body_COM_[2] << endl;
+
+    // Update robot COM pos
+    Eigen::Vector2d lateral_pos_est;
+    lateral_pos_est = estimateLateralPos(WBC_, body_quat_);
+    body_COM_(0) = lateral_pos_est(0);
+    body_COM_(1) = lateral_pos_est(1);
+    body_COM_(2) = estimateHeight(WBC_, feet_in_contact_manual);
+
+    // Update tasks
+    VectorNd jointPos(12);
+    std::copy(joint_positions_.data(), joint_positions_.data() + 12, jointPos.data());
     WBC_.updateBodyPosTask("COM_HEIGHT", body_COM_);
     WBC_.updateBodyPosTask("COM_LATERAL_POS", body_COM_);
     WBC_.updateBodyOriTask("COM_ORIENTATION", body_quat_);
-    VectorNd jointPos(12);
-    std::copy(joint_positions_.data(), joint_positions_.data() + 12, jointPos.data());
     WBC_.updateJointTask("JOINT_ANGLES", jointPos);
-    WBC_.updateBodyPosTask("BACK_LEFT_FOOT_POS",   WBC_.getRelativeBodyLocation("back_left_foot"));
-    WBC_.updateBodyPosTask("BACK_RIGHT_FOOT_POS",  WBC_.getRelativeBodyLocation("back_right_foot"));
-    WBC_.updateBodyPosTask("FRONT_LEFT_FOOT_POS",  WBC_.getRelativeBodyLocation("front_left_foot"));
-    WBC_.updateBodyPosTask("FRONT_RIGHT_FOOT_POS", WBC_.getRelativeBodyLocation("front_right_foot"));
+    WBC_.updateBodyPosTask("BACK_LEFT_FOOT_POS",   WBC_.calcBodyPosInBaseCoordinates("back_left_foot"));
+    WBC_.updateBodyPosTask("BACK_RIGHT_FOOT_POS",  WBC_.calcBodyPosInBaseCoordinates("back_right_foot"));
+    WBC_.updateBodyPosTask("FRONT_LEFT_FOOT_POS",  WBC_.calcBodyPosInBaseCoordinates("front_left_foot"));
+    WBC_.updateBodyPosTask("FRONT_RIGHT_FOOT_POS", WBC_.calcBodyPosInBaseCoordinates("front_right_foot"));
 }
 
 void PupperPlugin::logContactForces_(){

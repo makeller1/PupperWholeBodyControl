@@ -45,7 +45,7 @@ public:
     void updateBodyOriTask(std::string name, Eigen::Quaternion<double> state);
 
     // Get the position of a point on a body relative to the root body
-    VectorNd getRelativeBodyLocation(std::string body_name, VectorNd offset = VectorNd::Zero(3));
+    VectorNd calcBodyPosInBaseCoordinates(std::string body_name, VectorNd offset = VectorNd::Zero(3));
 
     // Getter for the robot joint angles
     VectorNd getJointPositions();
@@ -133,6 +133,7 @@ private:
     std::unordered_map<std::string, unsigned int> task_indices_;
 
     // OSQP Solver
+    VectorNd sol_prev; // previous QP solution vector [q_ddot;Fr]
     std::unique_ptr<OSQPSettings> QP_settings_;
     std::unique_ptr<OSQPData> QP_data_;
     OSQPWorkspace* work_;

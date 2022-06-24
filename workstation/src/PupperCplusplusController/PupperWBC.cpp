@@ -86,6 +86,9 @@ PupperWBC::PupperWBC(){
     QP_settings_ = std::make_unique<OSQPSettings>();
     QP_data_     = std::make_unique<OSQPData>();
 
+    // Set initial QP solution
+    sol_prev = VectorNd::Zero(30);
+
     // Default to identity quaternion
     robot_orientation_.x() = 0;
     robot_orientation_.y() = 0;
@@ -282,8 +285,8 @@ VectorNd PupperWBC::taskDerivative_(const Task *T){
     return deriv;
 }
 
-VectorNd PupperWBC::getRelativeBodyLocation(std::string body_name, VectorNd offset){
-    // Returns position in base (root) coordinates
+VectorNd PupperWBC::calcBodyPosInBaseCoordinates(std::string body_name, VectorNd offset){
+    // Returns position in world (root/base) coordinates
     int id = Pupper_.GetBodyId(body_name.c_str());
     VectorNd pos = CalcBodyToBaseCoordinates(Pupper_, joint_angles_, id, offset, false);
     return pos;
@@ -641,6 +644,9 @@ void PupperWBC::printDiag(){
             np_logger.logVectorXd(T->task_name+"_pos_target",T->pos_target);
 
             if (T->type == BODY_ORI){
+                np_logger.logVectorXd("ori_p",-T->Kp.cwiseProduct(quatDiff(T->quat_measured, T->quat_target)));
+                np_logger.logVectorXd("ori_d",-T->Kd.cwiseProduct(taskDerivative_(T) - T->x_ddot_ff));
+                // np_logger.
                 // cout << "P: " << T->Kp.cwiseProduct(quatDiff(T->quat_measured, T->quat_target)).transpose() << "\n";
                 // cout << "D: " << T->Kd.cwiseProduct(taskDerivative_(T) - T->x_ddot_ff).transpose() << endl;
             }
@@ -1018,8 +1024,10 @@ VectorNd PupperWBC::solveQP(int n, int m, MatrixNd &P, c_float *q, MatrixNd &A, 
     count += 1;
     if (count == 1){
         setupOSQP(n, m, P, q, A, lb, ub);
-        // Change run limit setting (after setup)
-        work_->settings->time_limit = 0.001;
+    }
+    if (count == 2){
+        // Change run limit setting (after setup/first solve)
+        work_->settings->time_limit = 0.001; // 1 ms
     }
 
     //Convert matrices into csc form
@@ -1051,12 +1059,18 @@ VectorNd PupperWBC::solveQP(int n, int m, MatrixNd &P, c_float *q, MatrixNd &A, 
         throw(std::runtime_error(message));
         // TODO: Engage motor braking
     }
-    if (solve_status == -2){
-        cout << "OSQP Solve error: " << std::to_string(solve_status) << endl;
-    }
+
     // QP solution vector [q_ddot;Fr]
     VectorNd sol(NUM_JOINTS + 12);
-    std::copy(work_->solution->x, work_->solution->x + sol.size(), sol.data());
+
+    // Use new solution if solve status is good, other return previous solution
+    if (solve_status == 1){
+        std::copy(work_->solution->x, work_->solution->x + sol.size(), sol.data());
+        sol_prev << sol;
+    }
+    else{
+        sol << sol_prev;
+    }
 
     // Log solver run time and status
     float solve_status_f = solve_status;
@@ -1065,7 +1079,7 @@ VectorNd PupperWBC::solveQP(int n, int m, MatrixNd &P, c_float *q, MatrixNd &A, 
     np_logger.logScalars({"solve_ms"},{work_->info->solve_time*1000.0f});
     np_logger.logScalars({"setup_ms"},{work_->info->setup_time*1000.0f});
     np_logger.logScalars({"solve_code"},{solve_status_f});
-    np_logger.logScalars({"timelimit"},{work_->settings->time_limit*1000.0f});
+    np_logger.logScalars({"osqp_time_limit"},{work_->settings->time_limit*1000.0f});
     return sol;
 }
 

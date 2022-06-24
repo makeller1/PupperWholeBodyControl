@@ -108,19 +108,19 @@ int main(int argc, char** argv){
     std::string body_name = "front_left_hip";
 
     // Test at different hip angles
-    // auto pos = Pup.getRelativeBodyLocation(body_name, VectorNd::Zero(3));
+    // auto pos = Pup.calcBodyPosInBaseCoordinates(body_name, VectorNd::Zero(3));
     // cout << "Pos: \n" << pos  << endl;
     // joint_angles(12) = M_PI_4;
     // Pup.updateController(joint_angles, joint_velocities, robot_position, robot_quaternion, feet_in_contact);
-    // pos = Pup.getRelativeBodyLocation(body_name, VectorNd::Zero(3));
+    // pos = Pup.calcBodyPosInBaseCoordinates(body_name, VectorNd::Zero(3));
     // cout << "Pos:\n" << pos << endl;
     // joint_angles(12) = -M_PI_4;
     // Pup.updateController(joint_angles, joint_velocities, robot_position, robot_quaternion, feet_in_contact);
-    // pos = Pup.getRelativeBodyLocation(body_name, VectorNd::Zero(3));
+    // pos = Pup.calcBodyPosInBaseCoordinates(body_name, VectorNd::Zero(3));
     // cout << "Pos:  \n" << pos   << endl;
     // joint_angles(12) = M_PI;
     // Pup.updateController(joint_angles, joint_velocities, robot_position, robot_quaternion, feet_in_contact);
-    // pos = Pup.getRelativeBodyLocation(body_name, VectorNd::Zero(3));
+    // pos = Pup.calcBodyPosInBaseCoordinates(body_name, VectorNd::Zero(3));
     // cout << "Pos: \n" << pos  << endl;
     
     // Pup.calculateOutputTorque();

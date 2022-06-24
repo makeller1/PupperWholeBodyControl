@@ -10,11 +10,43 @@ const T& max(const T& a, const T& b)
     return (a < b) ? b : a;
 }
 
-float estimateHeight(PupperWBC& WBC, std::array<bool, 4> feet_in_contact)
-{
+Eigen::Vector2d estimateLateralPos(PupperWBC& WBC, Eigen::Quaterniond robot_quat){
+    // robot_quat is a quaternion describing the orientation of the robot
+    // TODO: handle switching contacts, slipping feet
+    // Update the measured COM_Position as the average of the support polygon edges (contacts)
+    double offset_x = -0.07; // x distance to approximated COM in bottom_pcb frame (m) 
+    double offset_y = 0.0; // y distance to approximated COM in bottom_pcb frame (m) 
+
+    Vector3_t support_avg_world = Vector3_t::Zero(3); // Instantaneous support average
+    
+    // Compute average of support polygon edges in world coordinates
+    support_avg_world += WBC.calcBodyPosInBaseCoordinates("back_left_lower_link", WBC.body_contact_point_left);
+    support_avg_world += WBC.calcBodyPosInBaseCoordinates("back_right_lower_link", WBC.body_contact_point_right);
+    support_avg_world += WBC.calcBodyPosInBaseCoordinates("front_left_lower_link", WBC.body_contact_point_left);
+    support_avg_world += WBC.calcBodyPosInBaseCoordinates("front_right_lower_link", WBC.body_contact_point_right);
+
+    // Rotate to align with pupper in z direction
+    Eigen::AngleAxisd angle_axis;
+    angle_axis = robot_quat;
+    double total_angle = angle_axis.angle();
+    double z_angle = total_angle*angle_axis.axis()(2);
+
+    Eigen::Matrix3d R_body_to_world; // rotation matrix
+    R_body_to_world = Eigen::AngleAxisd(-z_angle, Eigen::Vector3d::UnitZ());
+
+    // Support average in body coordinates (negated for com position relative to support average)
+    Vector3_t support_avg_body = -R_body_to_world*support_avg_world;
+
+    support_avg_body(0) = support_avg_body(0) + offset_x;
+    support_avg_body(1) = support_avg_body(1) + offset_y;
+
+    return {support_avg_body(0),support_avg_body(1)};
+}
+
+float estimateHeight(PupperWBC& WBC, std::array<bool, 4> feet_in_contact){
     // Estimates the height of the pupper from the bottom PCB origin to the ground using forward kinematics.
     // Note: feet_in_contact_, joint_angles_ and orientation should be updated before this. 
-    // orientation is implicitly used in the getRelativeBodyLocation.
+    // orientation is implicitly used in the calcBodyPosInBaseCoordinates.
 
     int num_contacts = std::accumulate(feet_in_contact.begin(), feet_in_contact.end(), 0);
     float max_z = 0.0;
@@ -31,19 +63,19 @@ float estimateHeight(PupperWBC& WBC, std::array<bool, 4> feet_in_contact)
     }
 
     if (feet_in_contact[0]){
-        r_bl = WBC.getRelativeBodyLocation("back_left_lower_link", WBC.body_contact_point_left);
+        r_bl = WBC.calcBodyPosInBaseCoordinates("back_left_lower_link", WBC.body_contact_point_left);
         max_z = max(max_z,(float)-r_bl(2));
     }
     if (feet_in_contact[1]){
-        r_br = WBC.getRelativeBodyLocation("back_right_lower_link", WBC.body_contact_point_right);
+        r_br = WBC.calcBodyPosInBaseCoordinates("back_right_lower_link", WBC.body_contact_point_right);
         max_z = max(max_z,(float)-r_br(2));
     }
     if (feet_in_contact[2]){
-        r_fl = WBC.getRelativeBodyLocation("front_left_lower_link", WBC.body_contact_point_left);
+        r_fl = WBC.calcBodyPosInBaseCoordinates("front_left_lower_link", WBC.body_contact_point_left);
         max_z = max(max_z,(float)-r_fl(2));
     }
     if (feet_in_contact[3]){
-        r_fr = WBC.getRelativeBodyLocation("front_right_lower_link", WBC.body_contact_point_right);
+        r_fr = WBC.calcBodyPosInBaseCoordinates("front_right_lower_link", WBC.body_contact_point_right);
         max_z = max(max_z,(float)-r_fr(2));
     }
 

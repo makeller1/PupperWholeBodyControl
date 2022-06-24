@@ -119,7 +119,9 @@ int main(int argc, char** argv){
         ros::spinOnce();
 
         if (updated){
-            static auto time_main_loop_start = ros::Time::now().toSec();
+            static int k = 0;
+            k = k + 1;
+            auto time_main_loop_start = ros::Time::now().toSec();
             // Offset the quaternion from our initial state
             Eigen::Quaterniond correct_quat = initial_quaterion_.conjugate() * robot_quaternion_;
             // ROS_INFO("Corrected quaternion: [%.2f, (%.2f, %.2f, %.2f)]", 
@@ -131,21 +133,25 @@ int main(int argc, char** argv){
             std::cout << "error3d: " << 1000.0 * error3d.transpose() << std::endl;
 
             // Update the robot state
-            Eigen::Vector3d ang_velocity; // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! get from IMU gyro
+            Eigen::Vector3d ang_velocity; // estimate angular velocity
             Pup.updateController(joint_positions_, joint_velocities_, correct_quat, ang_velocity, contacts, time_now);
 
-            // Update robot height
-            robot_pos[2] = estimateHeight(Pup, contacts);
+            // Update robot COM pos
+            Eigen::Vector2d lateral_pos_est;
+            lateral_pos_est = estimateLateralPos(Pup, correct_quat);
+            robot_pos(0) = lateral_pos_est(0);
+            robot_pos(1) = lateral_pos_est(1);
+            robot_pos(2) = estimateHeight(Pup, contacts);
 
             // Update the tasks states
             Pup.updateBodyPosTask("COM_HEIGHT", robot_pos);
             Pup.updateBodyPosTask("COM_LATERAL_POS", robot_pos);
             Pup.updateBodyOriTask("COM_ORIENTATION", correct_quat);
             Pup.updateJointTask("JOINT_ANGLES", Pup.getJointPositions().segment(6,12));
-            Pup.updateBodyPosTask("BACK_LEFT_FOOT_POS",   Pup.getRelativeBodyLocation("back_left_foot"));
-            Pup.updateBodyPosTask("BACK_RIGHT_FOOT_POS",  Pup.getRelativeBodyLocation("back_right_foot"));
-            Pup.updateBodyPosTask("FRONT_LEFT_FOOT_POS",  Pup.getRelativeBodyLocation("front_left_foot"));
-            Pup.updateBodyPosTask("FRONT_RIGHT_FOOT_POS", Pup.getRelativeBodyLocation("front_right_foot"));
+            Pup.updateBodyPosTask("BACK_LEFT_FOOT_POS",   Pup.calcBodyPosInBaseCoordinates("back_left_foot"));
+            Pup.updateBodyPosTask("BACK_RIGHT_FOOT_POS",  Pup.calcBodyPosInBaseCoordinates("back_right_foot"));
+            Pup.updateBodyPosTask("FRONT_LEFT_FOOT_POS",  Pup.calcBodyPosInBaseCoordinates("front_left_foot"));
+            Pup.updateBodyPosTask("FRONT_RIGHT_FOOT_POS", Pup.calcBodyPosInBaseCoordinates("front_right_foot"));
 
             // Update goal tasks
             taskmaster_.updateGoalTasks(Pup, time_now);
@@ -157,6 +163,7 @@ int main(int argc, char** argv){
             }
             catch(std::runtime_error& e){
                 std::cout << e.what() << std::endl;
+                Pup.np_logger.saveData(); // save test log
                 throw(std::runtime_error(e.what()));
                 // TODO: Engage motor braking
             }
@@ -165,21 +172,28 @@ int main(int argc, char** argv){
             // Log task data to numpy logger
             Pup.printDiag(); 
 
-            // Shutdown if python node asks
-            if (shutdown == true){
-                Pup.np_logger.saveData();
-                ros::shutdown();
+            // Neglect first solve (setup time and first solution can be significant > 10ms)
+            // Todo: do something better here to allow WBC time to initialize
+            if (k==1){
+                tau.fill(0.0);
             }
 
             // Send commands
             std::copy(tau.begin(), tau.end(), command_msg.data.data());
             std::copy(q_ddot_des.begin(), q_ddot_des.end(), command_msg.data.data() + tau.size());
+
             RobotCommandPub.publish(command_msg);
             updated = false;
             std::cout << "dt since last run (ms): " << (time_now-time_last) * 1000.0f << std::endl;
             time_last = time_now;
             // Log time required to run wbc
             Pup.np_logger.logScalars({"wbc_ms"},{(ros::Time::now().toSec()-time_main_loop_start) * 1000.0f});
+
+            // Shutdown if python node asks
+            if (shutdown == true){
+                Pup.np_logger.saveData(); // save test log
+                ros::shutdown();
+            }
         }
     rate.sleep();
     }
