@@ -1,24 +1,26 @@
 // Bottom PCB (Without solder)
-    88 g (done)
+    88 g
 // Top PCB (with microusb connector)
-    56 g (done)
+    56 g
 // Rubber foot
-    03 g (done)
+    03 g
 // Front bulkhead with threaded inserts 
-    32 g (done)
-// Aluminum clamps
-    11 g (done)
+    32 g
+// Aluminum clamps (with screws)
+    12.4 g
 // Motor controller
-    22 g (done)
+    22 g
 // IMU + breadboard
-    17 g (done)
+    17 g
 // Power button
-    44 g (done)
+    44 g
+// Hub
+    8.8 g
 // Lower link
-    07 g (done)
+    07 g
+// Upper Link
+    13.3 g
 // Battery 
-    205 g (done)
-// Rotor with scaled inertia
-    (done)
+    205 g
 
 Total weight: 2,240 g
