@@ -193,7 +193,7 @@ def main():
                 print("Motors saturating")
                 # print("Desired currents: "+' '.join('{:.2f}'.format(f) for f in current_commands))
                 
-            current_commands = [0]*12
+            # current_commands = [0]*12
             hardware_interface.set_torque(current_commands) # misnomer until trq to current transformation is done on Teensy
             
             # Check if the pupper has faulted

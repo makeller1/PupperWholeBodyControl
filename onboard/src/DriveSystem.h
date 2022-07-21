@@ -19,28 +19,32 @@ struct DrivePrintOptions {
   bool velocities = true;
   bool currents = true;
   bool quaternion = true; 
-  bool mag = true;
   char delimiter = '\t';
 };
 
 const uint8_t kNumDriveSystemDebugValues = 7*12 + 1;
 
-// Class for controlling the 12 (no more and no less) actuators on Pupper
+// Class for controlling the 12 actuators on Pupper
 class DriveSystem {
  public:
-  static const size_t kNumActuators = 12;  // TODO something else with this
-  float m_xyz_magnitude = 1.0; // Magnitude of corrected magnetometer reading (should be near 1)
-
+  static const size_t kNumActuators = 12; 
+  // Timing troubleshooting variables
+  double rcan_ms; // read can messages
+  double rpy_ms; // read python messages
+  double cflg_ms; // check flags
+  double scc_ms; // send control commands
+  double ahrs_ms; // read/filter ahrs measurements
+  double spy_ms; // send messages to python
+  // double 
  private:
   C610Bus<CAN1> front_bus_;
   C610Bus<CAN2> rear_bus_;
 
   // quaternion of sensor frame relative to global frame
-  float q0_;
-  float q1_;
-  float q2_;
-  float q3_;
-
+  float q0_, q1_, q2_, q3_;
+  // time derivative of quaternion
+  float qDot0_, qDot1_, qDot2_, qDot3_;
+  
   DriveControlMode control_mode_;
 
   ActuatorPositionVector zero_position_offset_; // used to zero pupper laying down
@@ -54,8 +58,10 @@ class DriveSystem {
   // Indicates which motors violate fault_position_
   ActuatorActivations viol_pos_mask_;
   
-  // Indicates which motor first violated fault_position_
-  ActuatorActivations viol_pos_mask_first_;
+  // Indicates which motor index first violated fault_position_ (-1 indicates none)
+  int8_t viol_pos_mask_first_;
+  // Indicates which motor index first violated fault_velocity_ (-1 indicates none)
+  int8_t viol_vel_mask_first_;
 
   // Maximum current for current control and PD mode.
   float max_current_;
@@ -77,6 +83,9 @@ class DriveSystem {
 
   // Initialize the two CAN buses
   void InitializeDrive();
+
+  // Message sequence for tracking missed messages
+  unsigned long int msg_seq;
 
  public:
   // Construct drive system and initialize CAN buses.
@@ -103,7 +112,7 @@ class DriveSystem {
   void ZeroCurrentPosition();
 
   // Pass quaternion values
-  void SetQuaternions(float q0, float q1, float q2, float q3);
+  void SetQuaternions(float q0, float q1, float q2, float q3, float qDot0, float qDot1, float qDot2, float qDot3);
 
   // Set ControlMode to kTorqueControl
   void SetTorqueControl();

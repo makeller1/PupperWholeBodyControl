@@ -1,5 +1,5 @@
 #include "Calibration.h"
-#define BEEP_PIN 14 // 14 on pupper, 2 on single motor setup
+#define BEEP_PIN 2 // 14 on pupper, 2 on single motor setup
 
 bool CalibrateIMU(std::array<float, 6> raw_data)
 {   // Inputs: raw_data - array with elements mag_x, mag_y, mag_z, gry_x, gry_y, gry_z
@@ -150,7 +150,7 @@ float CheckCalMag(std::array<float, 3> mag_data, std::array<float, 9> calib_para
 {
     // Tests if the calibration is still required by calculating the magnitude of the magnetic field.
     // Correct calibration should result in a value near 1.0 +/- .2 for any orientation.
-    static int k = 1;
+    // static int k = 1;
     // static float r_mean = 0;
 
     float& b_mag_x = calib_params[3];

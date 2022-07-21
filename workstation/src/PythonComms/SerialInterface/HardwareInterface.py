@@ -52,7 +52,7 @@ class NonBlockingSerialReader:
 
 
 class HardwareInterface:
-    def __init__(self, port, baudrate=500000, start_byte=0x00):
+    def __init__(self, port, baudrate=115200, start_byte=0x00):
         self.start_byte = start_byte
         self.serial_handle = serial.Serial(
             port=port,
@@ -61,6 +61,7 @@ class HardwareInterface:
             stopbits=serial.STOPBITS_ONE,
             bytesize=serial.EIGHTBITS,
             timeout=0,
+            write_timeout=0
         )
         self.reader = NonBlockingSerialReader(self.serial_handle)
 
@@ -122,14 +123,10 @@ class HardwareInterface:
         header += "\n"
         logfile.write(header)
 
-    def send_dict(self, dict):
-        payload = msgpack.packb(dict, use_single_float=True)
+    def send_dict(self, dict_msg):
+        payload = msgpack.packb(dict_msg, use_single_float=True)
         start_sequence = bytes([self.start_byte, len(payload)])
         self.serial_handle.write(start_sequence + payload)
-        #################################################### mathew
-        # print("This is the dictionary sent to the pupper:")
-        # print(dict)
-        #################################################### mathew
 
     def set_trq_mode(self):
         self.send_dict({"trq_mode": True})

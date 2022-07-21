@@ -58,6 +58,7 @@ struct Task{
     // For diagnostics
     Eigen::VectorXd x_ddot_desired; // Desired task accelerations
     Eigen::VectorXd rf_desired; // Desired task reaction force
+    Eigen::VectorXd d_ori;
 };
 
 #endif

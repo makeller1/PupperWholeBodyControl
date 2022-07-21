@@ -7,6 +7,10 @@
 #include <string>
 #include <chrono>
 
+// #define DEBUG_MODE
+// #define MOTOR_LOW_PASS_ACTIVE
+// #define MEASUREMENT_NOISE_ACTIVE
+
 using std::cout;
 using std::endl;
 using std::array;
@@ -108,7 +112,7 @@ void PupperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
     this->updateConnection_ = event::Events::ConnectWorldUpdateBegin(std::bind(&PupperPlugin::onUpdate, this, std::placeholders::_1));
     
     // Set up update rate variables
-    update_interval_  = 1;  // (ms) 500Hz
+    update_interval_  = 1;  // (ms) 1000Hz
     last_update_time_ = 0.0;
 
     // Set up the connection to Gazebo topics
@@ -116,12 +120,27 @@ void PupperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
     connection_node_->Init("pupper_world");
     contact_sub_ = connection_node_->Subscribe("~/physics/contacts", &PupperPlugin::contactCallback_, this);
 
-    start_time = 0.0;
-
-    cout << "Loaded successfully" << endl;
+    #ifdef DEBUG_MODE
+        // Print model information
+        double mass_total = 0.0;
+        cout << "Gazebo: \n";
+        
+        for (auto x : model_->GetLinks()){
+            cout << "Link name: " << x->GetName() << endl;
+            cout << "Link id: " << x->GetId() << endl;
+            auto inertia = x->GetInertial();
+            cout << "Mass: " << inertia->Mass() << "\n";
+            cout << "COM: " << inertia->CoG() << "\n";
+            cout << "Inertia:\n\n";
+            cout << inertia->IXX() << " " << inertia->IXY() << " " << inertia->IXZ() << endl;
+            cout << inertia->IXY() << " " << inertia->IYY() << " " << inertia->IYZ() << endl;
+            cout << inertia->IXZ() << " " << inertia->IYZ() << " " << inertia->IZZ() << endl;
+            mass_total += inertia->Mass();
+        }
+        cout << "Model mass: " << mass_total << endl;
+        Eigen::Vector3d COM_total;
+    #endif
 }
-
-
 
 
 // =========================================================================================
@@ -134,17 +153,18 @@ void PupperPlugin::onUpdate(const common::UpdateInfo &_info){
     static double dt_wbc = 0.0; // ms elapsed time to run wbc (update model, update problem, and solve)
     simtime_ = _info.simTime.Double()*1e3;
 
+
     // First 5 seconds
-    if (simtime_ - start_time < taskmaster_.time_init_ms){
+    if (simtime_ < taskmaster_.time_init_ms){
         setJointPositions(taskmaster_.init_angles);
     }
     // Fall (hopefully) gracefully
-    else if (simtime_ - start_time < taskmaster_.time_fall_ms){
+    else if (simtime_ < taskmaster_.time_fall_ms){
         std::fill(control_torques_.begin(), control_torques_.end(), 0);
     }
     //Manage publisher update rate and run WBC control loop
-    else if (simtime_ - last_update_time_ >= std::max(update_interval_,dt_wbc)){
-    // else if (simtime_ - last_update_time_ >= update_interval_){
+    // else if (simtime_ - last_update_time_ >= std::max(update_interval_,dt_wbc)){
+    else if (simtime_ - last_update_time_ >= update_interval_){
         static double k = 1;
         static double mean_time = 0.0;
 
@@ -182,7 +202,8 @@ void PupperPlugin::onUpdate(const common::UpdateInfo &_info){
         last_update_time_ = simtime_;
     }
     // Save data to numpy format every second
-    if ((int)simtime_ % 1000 == 0){
+    // if ((int)simtime_ % 1000 == 0){
+    if ((int)simtime_ % 20 == 0){
         WBC_.np_logger.saveData();
     }
     // This needs to be outside the loop or else the joints will go dead on non-update iterations
@@ -245,10 +266,29 @@ void PupperPlugin::setJointPositions(vector<float> angles){
 // Update the simulation with the current control torques
 void PupperPlugin::applyTorques_(){
     for (int i = 0; i < 12; i++){
-        all_joints_[i]->SetForce(0, control_torques_[i]);
+        float torque_i = control_torques_.at(i);
+        // #ifdef MOTOR_LOW_PASS_ACTIVE
+        //     if (simtime_ >= taskmaster_.time_fall_ms)
+        //         torque_i = applyLowPass_(torque_i,i);
+        // #endif
+        all_joints_[i]->SetForce(0, torque_i);
+        // all_joints_[i]->SetForce(0, control_torques_[i]);
+
+        // Check for nan
+        if (std::isnan(torque_i)){
+            throw std::runtime_error("nan in torque command");
+        }
     }
 }
 
+float PupperPlugin::applyLowPass_(float torque, int i){
+    static std::array<float, 12> low_pass_torques = {0,0,0,0,0,0,0,0,0,0,0,0};
+    float dt = 0.001; // Seconds Gazebo physics simulation update rate
+    float motor_bandwidth = 50; // Hz motor bandwidth
+    float alpha = exp(-50*2*M_PI*dt);
+    low_pass_torques.at(i) = (alpha)*low_pass_torques.at(i) + (1-alpha)*torque;
+    return low_pass_torques.at(i);
+}
 
 // =========================================================================================
 // ----------------------------       UPDATE INFORMATION       -----------------------------
@@ -266,25 +306,31 @@ void PupperPlugin::updateJoints_(){
     }
 }
 
-// Update the body center of mass position and orienation
+// Update the body center of mass position and orienation from Gazebo measurements
 void PupperPlugin::updateBody_(){
     auto body_pose = model_->WorldPose();
     auto body_lin_vel  = model_->WorldLinearVel();
 
-    // Measured with Gazebo
-    // body_COM_[0] = body_pose.Pos().X();
-    // body_COM_[1] = body_pose.Pos().Y();
-    body_COM_[2] = body_pose.Pos().Z();
-    // cout << "Z measured : " << body_pose.Pos().Z() << endl;
+    Eigen::Quaterniond world_quaternion;
+    world_quaternion.x() = body_pose.Rot().X();
+    world_quaternion.y() = body_pose.Rot().Y();
+    world_quaternion.z() = body_pose.Rot().Z();
+    world_quaternion.w() = body_pose.Rot().W();
 
-    body_quat_.x() = body_pose.Rot().X();
-    body_quat_.y() = body_pose.Rot().Y();
-    body_quat_.z() = body_pose.Rot().Z();
-    body_quat_.w() = body_pose.Rot().W();
+    static bool initial_update = true;
+    static Eigen::Quaterniond initial_quaterion_;
+    if (initial_update == true){
+        initial_quaterion_ = world_quaternion;
+        initial_update = false;
+    }
+    // Zero the orientation to the initial state
+    body_quat_ = initial_quaterion_.conjugate() * world_quaternion;
+    // Don't zero the orientation
+    // body_quat_ = world_quaternion;
 
     // Rotate gazebo ang vel to body frame
     Eigen::Vector3d world_ang_vel;
-    auto R_world_to_body = body_quat_.toRotationMatrix();
+    auto R_world_to_body = world_quaternion.toRotationMatrix();
 
     world_ang_vel.x() = model_->WorldAngularVel().X();
     world_ang_vel.y() = model_->WorldAngularVel().Y();
@@ -299,11 +345,14 @@ void PupperPlugin::updateBody_(){
     body_COM_lin_vel_.x() = body_lin_vel.X();
     body_COM_lin_vel_.y() = body_lin_vel.Y();
     body_COM_lin_vel_.z() = body_lin_vel.Z();
+
+    // Measure body position
+    body_COM_[2] = body_pose.Pos().Z();
 }
 
 // Tell the controller the current state of the robot
 void PupperPlugin::updateController_(){
-    // body_COM_ang_vel_.setZero(); // Remove effect of body ang. vel. on j_dot_q_dot term
+    body_COM_ang_vel_.setZero(); // Remove effect of body ang. vel. on j_dot_q_dot term
     WBC_.updateController(joint_positions_, joint_velocities_, body_quat_, body_COM_ang_vel_, feet_in_contact_manual,simtime_/1000.0f);
 
     // Update robot COM pos

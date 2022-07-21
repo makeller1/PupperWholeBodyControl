@@ -8,8 +8,10 @@
 #include "Calibration.h"
 #include <EEPROM.h>
 
-const int CONTROL_DELAY = 1000;//1000;  // micros - mathew (Setting this to 10 results in CAN error)
-const int OBSERVE_DELAY = 1000;//1000; // micros
+const uint32_t CONTROL_DELAY = 500;//1000;  // micros - (soo small of a delay results in a CAN error)
+const uint32_t OBSERVE_DELAY = 500;//1000; // micros
+const uint32_t IMU_DELAY = 500;//1000; // micros
+
 const float MAX_CURRENT_DEFAULT = 2.0; // Amps - Default saturation value, is changed by run_djipupper
 
 const bool send_robot_states = true; // This is needed to send pupper states over serial - mathew
@@ -31,17 +33,30 @@ float s_mag_y;
 float s_mag_z;
 
 ////////////////////// SETUP IMU ////////////////////////
+#define USE_SPI       // Uncomment this to use SPI
+#define SPI_PORT SPI // Your desired SPI port.       Used only when "USE_SPI" is defined
+#define CS_PIN 10     // Which pin you connect CS to. Used only when "USE_SPI" is defined
+
 #define WIRE_PORT Wire
 #define AD0_VAL   1     // The value of the last bit of the I2C address. 
                         // On the SparkFun 9DoF IMU breakout the default is 1, and when 
                         // the ADR jumper is closed the value becomes 0
-ICM_20948_I2C myICM;  //create an ICM_20948_I2C object
-
+#ifdef USE_SPI
+ICM_20948_SPI myICM; // If using SPI create an ICM_20948_SPI object
+#else
+ICM_20948_I2C myICM; // Otherwise create an ICM_20948_I2C object
+#endif
 // Quaternions
 std::array<float,4> quats = {1.0f, 0.0f, 0.0f, 0.0f}; // w, x, y, z
+float qDot1, qDot2, qDot3, qDot4; // w, x, y, z time derivative of quaternion
 
-std::array<float, 4> MadgwickUpdate(float gx, float gy, float gz, float ax, float ay, float az, 
-                    float mx, float my, float mz, float q0, float q1, float q2, float q3, float dt);
+// TODO: Fix this madness below
+std::array<float, 4> MadgwickUpdate(float gx, float gy, float gz, 
+                                   float ax, float ay, float az, 
+                                   float mx, float my, float mz, 
+                                   float q0, float q1, float q2, float q3,
+                                   float& qDot1, float& qDot2, float& qDot3,float& qDot4,
+                                   float dt, float beta);
 
 ////////////////////// END SETUP ///////////////////////
 
@@ -56,18 +71,18 @@ CommandInterpreter interpreter(true);
 DrivePrintOptions options;
 
 float dt = 0.0f;
-long last_command_ts;
-long last_print_ts;
-long last_cal_print_ts;
-long last_imu_update;
-long last_header_ts;
+uint32_t last_command_us;
+uint32_t last_print_us;
+uint32_t last_cal_print_us;
+uint32_t last_imu_update_us;
+uint32_t last_imu_read_us;
 
 void setup(void) {
   Serial.begin(115200);
   pinMode(13, OUTPUT);
 
-  // Wait 5 seconds before turning on. This allows the motors to boot up.
-  for (int i = 0; i < 20; i++) {
+  // Wait before turning on. This allows the motors to boot up.
+  for (int i = 0; i < 5; i++) {
     digitalWrite(13, HIGH);
     delay(125);
     digitalWrite(13, LOW);
@@ -89,13 +104,18 @@ void setup(void) {
 
   if (AHRS_ENABLED){
     // Setup AHRS
-    WIRE_PORT.begin();
-    WIRE_PORT.setClock(400000);
 
     bool initialized = false;
     while( !initialized )
     {
-      myICM.begin( WIRE_PORT, AD0_VAL );
+      #ifdef USE_SPI
+        SPI_PORT.begin();
+        myICM.begin(CS_PIN, SPI_PORT);
+      #else
+        WIRE_PORT.begin();
+        WIRE_PORT.setClock(400000);
+        myICM.begin(WIRE_PORT, AD0_VAL);
+      #endif
 
       if( myICM.status != ICM_20948_Stat_Ok )
       {
@@ -106,12 +126,67 @@ void setup(void) {
         initialized = true;
       }
     }
-    //////////////////////////////// END IMU SETUP ///////////////////////////////////////////
+
+    // // Set full scale ranges for both acc and gyr
+    // ICM_20948_fss_t myFSS; // This uses a "Full Scale Settings" structure that can contain values for all configurable sensors
+    // myFSS.a = gpm2; // gpm2, gpm4, gpm8, gpm16
+    // myFSS.g = dps250; // dps250, dps500, dps1000, dps2000
+    // myICM.setFullScale((ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), myFSS);
+    // delay(10);
+
+    // // Set up Digital Low-Pass Filter configuration
+    // ICM_20948_dlpcfg_t myDLPcfg;    // Similar to FSS, this uses a configuration structure for the desired sensors
+    // myDLPcfg.a = acc_d246bw_n265bw; // (ICM_20948_ACCEL_CONFIG_DLPCFG_e)
+    //                                 // acc_d246bw_n265bw      - means 3db bandwidth is 246 hz and nyquist bandwidth is 265 hz
+    //                                 // acc_d111bw4_n136bw
+    //                                 // acc_d50bw4_n68bw8
+    //                                 // acc_d23bw9_n34bw4
+    //                                 // acc_d11bw5_n17bw
+    //                                 // acc_d5bw7_n8bw3        - means 3 db bandwidth is 5.7 hz and nyquist bandwidth is 8.3 hz
+    //                                 // acc_d473bw_n499bw
+
+    // myDLPcfg.g = gyr_d196bw6_n229bw8; // (ICM_20948_GYRO_CONFIG_1_DLPCFG_e)
+    //                                   // gyr_d196bw6_n229bw8
+    //                                   // gyr_d151bw8_n187bw6
+    //                                   // gyr_d119bw5_n154bw3
+    //                                   // gyr_d51bw2_n73bw3
+    //                                   // gyr_d23bw9_n35bw9
+    //                                   // gyr_d11bw6_n17bw8
+    //                                   // gyr_d5bw7_n8bw9
+    //                                   // gyr_d361bw4_n376bw5
+
+    // myICM.setDLPFcfg((ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), myDLPcfg);
+    // delay(10);
+    // myICM.enableDLPF(ICM_20948_Internal_Acc, true);
+    // delay(10);
+    // myICM.enableDLPF(ICM_20948_Internal_Gyr, true);
+    // delay(10);
+
+    // Fast compute of initial quaternion by running filter with high gain
+    uint32_t i = 0;
+    uint32_t N = 5000;
+    float beta_init = 10.0f;
+    while (i < N){
+      if(myICM.dataReady())
+      {
+        beta_init = 10.0f*( 1 - ((float)(i)/float(N)) ) + 0.1f;
+        myICM.getAGMT();
+        dt = (micros() - last_imu_update_us)/1000000.0f; 
+        quats = MadgwickUpdate(myICM.gyrX()-b_gyr_x, myICM.gyrY()-b_gyr_y, myICM.gyrZ()-b_gyr_z, myICM.accX(), myICM.accY(), myICM.accZ(), 
+                              (myICM.magX()-b_mag_x)*s_mag_x, -(myICM.magY()-b_mag_y)*s_mag_y, -(myICM.magZ()-b_mag_z)*s_mag_z,
+                              quats[0], quats[1], quats[2], quats[3], qDot1, qDot2, qDot3, qDot4, dt, beta_init);
+        last_imu_update_us = micros();
+        i += 1;
+      }
+    }
+    ////////////////////////////// END IMU SETUP ///////////////////////////////////////////
   }
 
-  last_command_ts = micros(); // (micro sec)
-  last_print_ts = millis(); // (ms)
-  last_header_ts = millis(); // (ms)
+  last_command_us = micros();
+  last_print_us = micros();
+  last_cal_print_us = micros();
+  last_imu_update_us = micros();
+  last_imu_read_us = micros();
 
   // Runtime config
   drive.SetMaxCurrent(MAX_CURRENT_DEFAULT);
@@ -119,7 +194,6 @@ void setup(void) {
   options.positions = true;
   options.velocities = true;
   options.currents = true; // last actual current
-  options.mag = false; // magnitude of normalized magnetometer readings
   if (!AHRS_ENABLED){
     options.quaternion = false;
   }
@@ -138,11 +212,6 @@ void loop()
     {
       auto trqs = interpreter.LatestTorqueCommand();
       drive.SetTorques(Utils::ArrayToVector<12, 12>(trqs));
-      if (ECHO_COMMANDS) 
-      {
-        Serial << "Torque command: "
-               << interpreter.LatestTorqueCommand();
-      }
     }
     if (r.trq_mode_set)
     {
@@ -182,60 +251,62 @@ void loop()
   }
 
   // Update control commands
-  if (micros() - last_command_ts >= CONTROL_DELAY) 
+  if (micros() - last_command_us >= CONTROL_DELAY) 
   {
     // TODO: characterize maximum lag between control updates
     drive.Update();
-    last_command_ts = micros();
+    last_command_us = micros();
   }
 
   // Filter IMU data and send to DriveSystem
   if (AHRS_ENABLED)
   {
-      // Update filter
-      dt = (micros() - last_imu_update)/1000000.0f; 
-      quats = MadgwickUpdate(myICM.gyrX()-b_gyr_x, myICM.gyrY()-b_gyr_y, myICM.gyrZ()-b_gyr_z, myICM.accX(), myICM.accY(), myICM.accZ(), 
-                            (myICM.magX()-b_mag_x)*s_mag_x, -(myICM.magY()-b_mag_y)*s_mag_y, -(myICM.magZ()-b_mag_z)*s_mag_z,quats[0],quats[1],quats[2],quats[3], dt);
+    // Update filter
+    dt = (micros() - last_imu_update_us)/1000000.0f; 
+    quats = MadgwickUpdate(myICM.gyrX()-b_gyr_x, myICM.gyrY()-b_gyr_y, myICM.gyrZ()-b_gyr_z, myICM.accX(), myICM.accY(), myICM.accZ(), 
+                              (myICM.magX()-b_mag_x)*s_mag_x, -(myICM.magY()-b_mag_y)*s_mag_y, -(myICM.magZ()-b_mag_z)*s_mag_z,
+                              quats[0], quats[1], quats[2], quats[3], qDot1, qDot2, qDot3, qDot4, dt, 0.1f);
 
-      // Send quaternion values to DriveSystem
-      drive.SetQuaternions(quats[0],quats[1],quats[2],quats[3]);
-      last_imu_update = micros();
-    if(myICM.dataReady() && micros() - last_command_ts >= CONTROL_DELAY)
+    // Send quaternion values to DriveSystem
+    drive.SetQuaternions(quats[0],quats[1],quats[2],quats[3], qDot1, qDot2, qDot3, qDot4);
+    last_imu_update_us = micros();
+    if(myICM.dataReady())// && micros() - last_imu_read_us >= IMU_DELAY)
     {
-      // Read IMU data (takes 0.98 ms)
+      // Serial << "IMU time since last read (ms): " << (micros()-last_imu_read_us)*1E-3 << endl;
+      Utils::tic();
+      // Read IMU data (takes 0.98 ms with i2c, 0.09 ms with SPI)
       myICM.getAGMT();
+      drive.ahrs_ms = Utils::toc();
+      // Serial << "IMU time to read elapsed (ms): " << drive.ahrs_ms << endl;
+      last_imu_read_us = micros();
     }
   }
 
   // Check parameters stored in EEPROM
   if (print_cal_params) 
   {
-    std::array<float,9> calib_params = ReadParams();
-    std::array<float,3> mag_data = {myICM.magX(), myICM.magY(), myICM.magZ()};
-    float meanmag = CheckCalMag(mag_data, calib_params);
-    if (micros() - last_cal_print_ts >= 1000000)
+    // std::array<float,9> calib_params = ReadParams();
+    // std::array<float,3> mag_data = {myICM.magX(), myICM.magY(), myICM.magZ()};
+    // float meanmag = CheckCalMag(mag_data, calib_params);
+    if (micros() - last_cal_print_us >= 10000)
     {
-      std::array<float,9> params = ReadParams();
-      Serial << "Parameters: b_gyro: "<< params[0] << ", " << params[1] << ", " << params[2] << endl; 
-      Serial << "Parameters: b_mag : "<< params[3] << ", " << params[4] << ", " << params[5] << endl;
-      Serial << "Parameters: s_mag : "<< params[6] << ", " << params[7] << ", " << params[8] << endl; 
-      Serial << "Normalized magnetometer magnitude: " << meanmag << endl;
+      // std::array<float,9> params = ReadParams();
+      // Serial << "Parameters: b_gyro: "<< params[0] << ", " << params[1] << ", " << params[2] << endl; 
+      // Serial << "Parameters: b_mag : "<< params[3] << ", " << params[4] << ", " << params[5] << endl;
+      // Serial << "Parameters: s_mag : "<< params[6] << ", " << params[7] << ", " << params[8] << endl; 
+      // Serial << "Normalized magnetometer magnitude: " << meanmag << endl;
       Serial << "Gyro measurements: " << myICM.gyrX() << " " << myICM.gyrY() << " " << myICM.gyrZ() << endl;
       Serial << "Mag measurements: " << myICM.magX() << " " <<   myICM.magY() << " " <<  myICM.magZ() << endl;
       Serial << "Acc measurements: " << myICM.accX() << " " <<  myICM.accY() << " " <<  myICM.accZ() << endl;
-      last_cal_print_ts = micros();
+      last_cal_print_us = micros();
     }
   }
 
   // Send measurements to workstation
   if (send_robot_states){
-    if (micros() - last_print_ts >= OBSERVE_DELAY) {
-      if (options.mag){
-      // Check on magnetometer calibration quality
-      drive.m_xyz_magnitude = CheckCalMag({myICM.magX(), myICM.magY(), myICM.magZ()}, ReadParams());
-      }
+    if (micros() - last_print_us >= OBSERVE_DELAY) {
       drive.PrintMsgPackStatus(options);
-      last_print_ts = micros();
+      last_print_us = micros();
     }
   }
 }

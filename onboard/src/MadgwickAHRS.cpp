@@ -14,17 +14,22 @@
 
 //---------------------------------------------------------------------------------------------------
 // Definitions
-#define beta 0.1f // 2 * proportional gain (Kp)						
+// #define beta 0.1f // 2 * proportional gain (Kp)						
 
 // Functions
 #define SERIAL_PORT Serial
 //---------------------------------------------------------------------------------------------------
 // AHRS algorithm update
-std::array<float, 4> MadgwickUpdate(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz, float q0, float q1, float q2, float q3, float dt) {
+std::array<float, 4>MadgwickUpdate(float gx, float gy, float gz, 
+                                   float ax, float ay, float az, 
+                                   float mx, float my, float mz, 
+                                   float q0, float q1, float q2, float q3,
+                                   float& qDot1, float& qDot2, float& qDot3,float& qDot4,
+                                   float dt, float beta) 
+{
             float norm;
             float hx, hy, _2bx, _2bz;
             float s1, s2, s3, s4;
-            float qDot1, qDot2, qDot3, qDot4;
 
 		// 	// Convert gyroscope degrees/sec to radians/sec
 			gx *= 0.0174533f;

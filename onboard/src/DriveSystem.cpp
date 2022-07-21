@@ -1,5 +1,4 @@
 #include "DriveSystem.h"
-
 #include <ArduinoJson.h>
 #include <Streaming.h>
 #include "Utils.h"
@@ -11,11 +10,11 @@ DriveSystem::DriveSystem() : front_bus_(), rear_bus_()
   fault_current_ = 10.0; // Violation sets control mode to kError
 
   // Fault positions measured relative to starting pose (laying down)
-  fault_position_array_high_[0] = 0.35; // 0.35 hip fault position 
+  fault_position_array_high_[0] = 999.99; // 0.35 hip fault position 
   fault_position_array_high_[1] = 0.25;  // shoulder fault position
   fault_position_array_high_[2] = 1.9;  // elbow fault position
 
-  fault_position_array_low_[0] = -0.35; // -0.35 hip fault position
+  fault_position_array_low_[0] = -999.99; // -0.35 hip fault position
   fault_position_array_low_[1] = -1.0; // 0.75 shoulder fault position
   fault_position_array_low_[2] = -0.15; // elbow fault position
 
@@ -26,6 +25,8 @@ DriveSystem::DriveSystem() : front_bus_(), rear_bus_()
   max_current_ = 3.0; // Saturates current command - overridden by main.cpp
   viol_vel_mask_.fill(false);
   viol_pos_mask_.fill(false);
+  viol_pos_mask_first_ = -1;
+  viol_vel_mask_first_ = -1;
 
   // quaternion of sensor frame relative to global frame
   q0_ = 1; // w
@@ -33,6 +34,15 @@ DriveSystem::DriveSystem() : front_bus_(), rear_bus_()
   q2_ = 0; // y
   q3_ = 0; // z
   
+  // time derivative of quaternion
+  qDot0_ = 0;
+  qDot1_ = 0;
+  qDot2_ = 0;
+  qDot3_ = 0; 
+
+  // Message sequence for tracking missed messages
+  msg_seq = 0;
+
   //  Currently implement the zero-offset in python
   //                              FR0, FR1, FR2                   FL0, FL1, FL2                  BR0,BR1,BR2                    BL0,BL1,BL2     
   //zero_position_offset_ = {.06539, 1.19682, 2.71176,  -.06539, -1.19682, -2.71176,   .06539, 1.19682, 2.71176,    -.06539, -1.19682, -2.71176}; // used to zero pupper laying down
@@ -61,14 +71,13 @@ DriveControlMode DriveSystem::CheckErrors()
     {
       viol_pos_mask_[i] = true;
       error_found = true;
-      // BeepLow(); // beep on
     }
     else
     {
       viol_pos_mask_[i] = false;
     }
     // check velocities
-    if (abs(GetActuatorVelocity(i)) > fault_velocity_) 
+    if (fabsf(GetActuatorVelocity(i)) > fault_velocity_) 
     {
       viol_vel_mask_[i] = true;
       error_found = true;
@@ -78,12 +87,25 @@ DriveControlMode DriveSystem::CheckErrors()
       viol_vel_mask_[i] = false;
     }
   }
-
   if (error_found)
   {
     if (control_mode_ == DriveControlMode::kTorqueControl)
     {
-      viol_pos_mask_first_ = viol_pos_mask_;
+      // BeepLow(); // beep on
+      // Indicate which motor violated fault pos/vel
+      viol_pos_mask_first_ = -1;
+      viol_vel_mask_first_ = -1;
+      for (uint8_t i = 0; i < kNumActuators; i++)
+      {
+        if(viol_pos_mask_[i] == true)
+        {
+          viol_pos_mask_first_ = i;
+        }
+        if(viol_vel_mask_[i] == true)
+        {
+          viol_vel_mask_first_ = i;
+        }
+      }
     }
     return DriveControlMode::kError;
   }
@@ -103,12 +125,16 @@ void DriveSystem::ZeroCurrentPosition()
   zero_position_ = GetRawActuatorPositions();
 }
 
-void DriveSystem::SetQuaternions(float q0, float q1, float q2, float q3)
+void DriveSystem::SetQuaternions(float q0, float q1, float q2, float q3, float qDot0, float qDot1, float qDot2, float qDot3)
 {
   q0_ = q0;
   q1_ = q1;
   q2_ = q2;
   q3_ = q3;
+  qDot0_ = qDot0;
+  qDot1_ = qDot1;
+  qDot2_ = qDot2;
+  qDot3_ = qDot3;
 }
 
 void DriveSystem::SetFaultCurrent(float fault_current) 
@@ -217,10 +243,10 @@ void DriveSystem::CalibrationControl()
 {
   // Regulate joint velocity to make calibration easier
   static std::array<float,12> e_I = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; // Integral of velocity error
-  static float last_command_ts = micros();
+  static float last_command_ts = millis();
 
-  float now = micros();
-  float dt = (now - last_command_ts)/1000000.0f; 
+  float now = millis();
+  float dt = (now - last_command_ts)/1000.0f; 
 
   const float Kd = 0.6;
   const float Ki = 1.0;
@@ -239,8 +265,8 @@ void DriveSystem::CalibrationControl()
 
 void DriveSystem::CommandCurrents(ActuatorCurrentVector currents) 
 {
-  ActuatorCurrentVector current_command =
-      Utils::Constrain(currents, -max_current_, max_current_);
+  ActuatorCurrentVector current_command = Utils::Constrain(currents, -max_current_, max_current_);
+
   if (Utils::Maximum(current_command) > fault_current_ ||
       Utils::Minimum(current_command) < -fault_current_) {
     Serial << "\nRequested current too large. Erroring out.\n" << endl;
@@ -325,7 +351,7 @@ void DriveSystem::PrintMsgPackStatus(DrivePrintOptions options) {
   // Serial << "PrintMsgPackStatus() is running" << endl; // - mathew
   StaticJsonDocument<2048> doc;
   // 21 micros to put this doc together
-  doc["ts"] = millis();
+  doc["ts"] = micros()/1000.0; // ms
   for (uint8_t i = 0; i < kNumActuators; i++) 
   {
     if (options.positions) {
@@ -344,17 +370,22 @@ void DriveSystem::PrintMsgPackStatus(DrivePrintOptions options) {
     doc["quat"][1] = q1_; // x
     doc["quat"][2] = q2_; // y
     doc["quat"][3] = q3_; // z
+    doc["quatdot"][0] = qDot0_; // w
+    doc["quatdot"][1] = qDot1_; // x
+    doc["quatdot"][2] = qDot2_; // y
+    doc["quatdot"][3] = qDot3_; // z
   }
-  if (options.mag)
+  if (true)
   {
-    doc["mag"][0] = m_xyz_magnitude;
+    // For debugging what's hanging the teensy
+    doc["response"] = torques_(0);
+    doc["seq"] = msg_seq;
+    msg_seq += 1;
   }
   if (control_mode_ == DriveControlMode::kError)
   {
-    for (uint8_t i = 0; i < kNumActuators; i++)
-    {
-      doc["err"][i] = viol_pos_mask_first_[i];
-    }
+    doc["err"][0] = viol_pos_mask_first_;
+    doc["err"][1] = viol_vel_mask_first_;
   }
   uint16_t num_bytes = measureMsgPack(doc);
   // Serial.println(num_bytes);

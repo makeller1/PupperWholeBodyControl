@@ -3,27 +3,37 @@
 <robot name = "left_leg_macro" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
     <!-- Macro for the creation of a leg -->
-    <xacro:macro name = "leftLeg" params = "name parent *origin *origin2">
+    <!-- hub_relative_origin is the origin of the hub relative to its parent's origin (the bottom_PCB in this case) 
+         similarly for the other parts of upper_link and lower_link-->
+    <xacro:macro name = "leftLeg" params = "name parent *hub_relative_origin *upper_link_relative_origin *lower_link_relative_origin">
 
         <!-- Create hub that connects to the motor -->
         <xacro:property name = "hubName" value = "${name}_left_hub"/>
         <link name = "${hubName}">
             <inertial>
-                <xacro:volumeToMass volume = "7096"/>
-                <xacro:scaleInertia ixx = "1456709" ixz = "446692" iyy = "1472451" izz = "1155732"/>
+                <xacro:scaleOrigin  x = "${left_hub_com_x}" 
+                                    y = "${left_hub_com_y}" 
+                                    z = "${left_hub_com_z}"/>
+                <xacro:scaleMass mass = "${left_hub_mass}"/>
+                <xacro:scaleMMOI ixx  = "${left_hub_ixx}"
+                                 iyy  = "${left_hub_iyy}"
+                                 izz  = "${left_hub_izz}"
+                                 ixy  = "${left_hub_ixy}"
+                                 ixz  = "${left_hub_ixz}"
+                                 iyz  = "${left_hub_iyz}" />
             </inertial>
 
             <xacro:if value = "${full_urdf}">
             <visual name = "${hubName}_visual">
                 <material name = "blue"/>
                 <geometry> 
-                    <mesh filename = "${VisualPath}/Leg/part1_hub.stl" scale = "${meshScale_mm}"/>
+                    <mesh filename = "${VisualPath}/Leg/assembly_hip_left_STL.stl" scale = "${meshScale_meters}"/>
                 </geometry>  
             </visual>
 
             <collision name = "${hubName}_collision">
                 <geometry>
-                    <mesh filename = "${CollisionPath}/Leg/part1_hub_siplified.dae" scale = "${meshScale_mm}"/>
+                    <mesh filename = "${CollisionPath}/Leg/assembly_hip_left_simplified.dae" scale = "${meshScale_meters}"/>
                 </geometry>
             </collision>
             </xacro:if>
@@ -33,110 +43,76 @@
         <xacro:property name = "upperName" value = "${name}_left_upper_link"/>
         <link name = "${upperName}">
             <inertial>
-                <xacro:volumeToMass volume = "13804"/>
-                <xacro:scaleInertia ixx = "14050550" ixy = "156735" iyy = "957647" izz = "13227597"/>
+                <xacro:scaleOrigin  x = "${left_upper_link_com_x}" 
+                                    y = "${left_upper_link_com_y}" 
+                                    z = "${left_upper_link_com_z}"/>
+                <xacro:scaleMass mass = "${left_upper_link_mass}"/>
+                <xacro:scaleMMOI ixx  = "${left_upper_link_ixx}"
+                                 iyy  = "${left_upper_link_iyy}"
+                                 izz  = "${left_upper_link_izz}"
+                                 ixy  = "${left_upper_link_ixy}"
+                                 ixz  = "${left_upper_link_ixz}"
+                                 iyz  = "${left_upper_link_iyz}" />
             </inertial>
 
             <xacro:if value = "${full_urdf}">
             <visual name = "${upperName}_visual">
                 <material name = "yellow"/>
                 <geometry>
-                    <mesh filename = "${VisualPath}/Leg/part2_upperlink.stl" scale = "${meshScale_mm}"/>
+                    <mesh filename = "${VisualPath}/Leg/assembly_upper_link_left_STL.stl" scale = "${meshScale_meters}"/>
                 </geometry>
             </visual>
 
             <collision name = "${upperName}_collision">
                 <geometry>
-                    <mesh filename = "${CollisionPath}/Leg/part2_upperlink_simplified.dae" scale = "${meshScale_mm}"/>
+                    <mesh filename = "${CollisionPath}/Leg/assembly_upper_link_left_simplified.dae" scale = "${meshScale_meters}"/>
                 </geometry>
             </collision>
             </xacro:if>
         </link>
-
-        <!-- Create the covering for the upper portion of the leg -->
-        <xacro:property name = "upperCoverName" value = "${name}_left_cover"/>
-        <link name = "${upperCoverName}">
-            <inertial>
-                <xacro:volumeToMass volume = "6414"/>
-                <xacro:scaleInertia ixx = "4268927" iyy = "991662" izz = "3827615" ixy = "171794" ixz = "0.7" iyz = "-24"/>
-            </inertial>
-
-            <xacro:if value = "${full_urdf}">
-            <visual name = "${upperCoverName}_visual">
-                <material name = "red"/>
-                <geometry>
-                    <mesh filename = "${VisualPath}/Leg/part3_shroud.stl" scale = "${meshScale_mm}"/>
-                </geometry>
-            </visual>
-
-            <collision name = "${upperCoverName}_collision">
-                <geometry>
-                    <mesh filename = "${CollisionPath}/Leg/part3_shroud_simplified.dae" scale = "${meshScale_mm}"/>
-                </geometry>
-            </collision>
-            </xacro:if>
-        </link>
-
-        <!-- Connect the covering to the upper link -->
-        <joint name = "${name}_left_shroud_to_leg" type = "fixed">
-            <parent link = "${upperName}"/>
-            <child  link = "${upperCoverName}"/>
-            <origin xyz  = "0.007 0.085 0" rpy = "${PI} 0 0"/>
-        </joint>
 
         <!-- Create the lower link -->
         <xacro:property name = "lowerName" value = "${name}_left_lower_link"/>
+
         <link name = "${lowerName}">
             <inertial>
-                <xacro:volumeToMass volume = "13170"/>
-                <xacro:scaleInertia ixx = "18151954" iyy = "437604" izz = "18307054" ixy = "-238617" ixz = "19947" iyz = "672611"/>
+                <xacro:scaleOrigin  x = "${left_lower_link_com_x}" 
+                                    y = "${left_lower_link_com_y}" 
+                                    z = "${left_lower_link_com_z}"/>
+                <xacro:scaleMass mass = "${left_lower_link_mass}"/>
+                <xacro:scaleMMOI ixx  = "${left_lower_link_ixx}"
+                                 iyy  = "${left_lower_link_iyy}"
+                                 izz  = "${left_lower_link_izz}"
+                                 ixy  = "${left_lower_link_ixy}"
+                                 ixz  = "${left_lower_link_ixz}"
+                                 iyz  = "${left_lower_link_iyz}" />
             </inertial>
 
             <xacro:if value = "${full_urdf}">
             <visual>
                 <material name = "blueGreen"/>
                 <geometry>
-                    <mesh filename = "${VisualPath}/Leg/part4_lowerlink.stl" scale = "${meshScale_mm}"/>
+                    <mesh filename = "${VisualPath}/Leg/assembly_lower_link_left_STL.stl" scale = "${meshScale_meters}"/>
                 </geometry>
             </visual>
 
             <collision name = "${lowerName}_collision">
                 <geometry>
-                    <mesh filename = "${CollisionPath}/Leg/part4_lowerlink_simplified.dae" scale = "${meshScale_mm}"/>
+                    <mesh filename = "${CollisionPath}/Leg/assembly_lower_link_left_simplified.dae" scale = "${meshScale_meters}"/>
                 </geometry>
             </collision>
             </xacro:if>
         </link>
 
-        <!-- Create the foot pad -->
-        <link name = "${name}_left_foot">
-            <inertial>
-                <xacro:footInertia/>
-            </inertial>
-
-            <xacro:if value = "${full_urdf}">
-            <visual name = "${name}_left_foot_visual">
-                <material name = "red"/>
-                <geometry>
-                    <mesh filename = "${VisualPath}/Leg/hemisphere.stl" scale = "0.00026 0.00026 0.00026"/>
-                </geometry>
-            </visual>
-
-            <collision name = "${name}_left_foot_collision">
-                <geometry>
-                    <mesh filename = "${CollisionPath}/Leg/hemisphere_simplified.dae" scale = "0.00026 0.00026 0.00026"/>
-                </geometry>
-            </collision>
-            </xacro:if>
-        </link>
         <xacro:if value = "${full_urdf}">
-        <gazebo reference="${name}_left_foot">
+        <gazebo reference="${name}_left_lower_link">
             <collision>
                 <surface>
                     <contact>
                         <ode>
-                            <kp>1e15</kp>
-                            <kd>1e13</kd>
+                            <xacro:insert_block name = "contact_kp" /> <!-- <kp>1e15</kp> -->
+                            <xacro:insert_block name = "contact_kd" /> <!-- <kd>1e13</kd> -->
+                            <!-- <min_depth>0.01</min_depth> -->
                         </ode>
                     </contact>
                     <friction>
@@ -148,48 +124,21 @@
                 </surface>
             </collision>
         </gazebo>
-        <gazebo reference="${lowerName}">
-            <collision>
-                <surface>
-                    <contact>
-                        <ode>
-                            <min_depth>0.01</min_depth>
-                        </ode>
-                    </contact>
-                </surface>
-            </collision>
-        </gazebo>
         </xacro:if>
-
-        <!-- Connect foot pad to lower link -->
-        <joint name = "${name}_left_foot_joint" type = "fixed">
-            <parent link = "${lowerName}"/>
-            <child  link = "${name}_left_foot"/>
-            <origin xyz = "0 -0.11 0.009" rpy = "${PI/2} 0 ${PI/4 - 0.1}"/>
-        </joint>
-
-        <xacro:property name = "new_origin" value = "${origin}"/>
 
         <!-- Connect leg to parent with a motor -->
         <xacro:motor name = "${name}_left_hip" axis = "-1 0 0" fixed_parent = "${parent}" revolute_child = "${hubName}">
-            <xacro:insert_block name = "origin"/>
-            <!-- <origin xyz = "0 0 0.036" rpy = "0 ${-PI/2} 0"/> -->
-            <!-- <origin xyz = "0 0.0 0.036" rpy = "${-PI/2} 0 0"/> -->
-            <xacro:insert_block name = "origin2"/>
+            <xacro:insert_block name = "hub_relative_origin"/>
         </xacro:motor>
 
         <!-- Join the Hub and the Upper Link with a motor -->
-        <xacro:motor name = "${name}_left_shoulder" axis = "1 0 0" fixed_parent = "${hubName}" revolute_child = "${upperName}">
-            <origin xyz = "0 0 0.005" rpy = "0 0 0"/>
-            <!-- <origin xyz = "0 0 0.022" rpy = "0 ${-PI/2} 0"/> -->
-            <origin xyz = "0 0 0.022" rpy = "0 ${-PI/2} 0"/>
+        <xacro:motor name = "${name}_left_shoulder" axis = "0 1 0" fixed_parent = "${hubName}" revolute_child = "${upperName}">
+            <xacro:insert_block name = "upper_link_relative_origin"/>
         </xacro:motor>
 
         <!-- Connect Upper Link and Lower Link with a motor -->
-        <xacro:motor name = "${name}_left_elbow" axis = "0 0 -1" fixed_parent = "${upperName}" revolute_child = "${lowerName}">
-            <origin xyz = "0.023 0.082 0" rpy = "0 ${PI/2} 0"/>
-            <!-- <origin xyz = "0 0 -0.032" rpy = "${PI} ${PI} 0"/>  -->
-            <origin xyz = "-0.006 0.08 0" rpy = "0 ${-PI/2} ${PI}"/> 
+        <xacro:motor name = "${name}_left_elbow" axis = "0 -1 0" fixed_parent = "${upperName}" revolute_child = "${lowerName}">
+            <xacro:insert_block name = "lower_link_relative_origin"/>
         </xacro:motor>
 
     </xacro:macro>

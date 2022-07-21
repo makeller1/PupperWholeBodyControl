@@ -7,3 +7,6 @@ onboard/.gitignore
 **/__pycache__
 workstation/src/PythonComms/KeyboardController/UDPComms/__pycache__/__init__.cpython-38.pyc
 workstation/src/PythonComms/KeyboardController/UDPComms/__pycache__/UDPComms.cpython-38.pyc
+workstation/src/PythonComms/debug_*
+workstation/src/PythonComms/scratch_*
+workstation/src/PythonComms/*.pkl

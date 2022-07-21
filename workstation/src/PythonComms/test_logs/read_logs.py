@@ -150,8 +150,76 @@ def xComPosTask(df):
     plt.legend(['pos target','pos measured'])
     plt.xlabel('time (ms)')
     plt.grid()
+
+def OriTask(df):
+    plt.figure()
+    ax1 = plt.subplot(3,1,1)
+    plt.title('ORI Task x')
+    plt.plot(t,df["COM_ORIENTATION_acc_opt_1"])
+    plt.plot(t,df["COM_ORIENTATION_acc_des_1"])
+    plt.legend(['optimal acc','desired acc'])
+    plt.grid()
+
+    plt.subplot(3,1,2, sharex = ax1)
+    plt.title('ORI Task y')
+    plt.plot(t,df["COM_ORIENTATION_acc_opt_2"])
+    plt.plot(t,df["COM_ORIENTATION_acc_des_2"])
+    plt.legend(['optimal acc','desired acc'])
+    plt.grid()
+    
+    plt.subplot(3,1,3, sharex = ax1)
+    plt.title('ORI Task z')
+    plt.plot(t,df["COM_ORIENTATION_acc_opt_3"])
+    plt.plot(t,df["COM_ORIENTATION_acc_des_3"])
+    plt.legend(['optimal acc','desired acc'])
+    plt.grid()
+    
+    plt.figure()
+    ax1 = plt.subplot(3,1,1)
+    plt.title("X ori")
+    plt.plot(t,df["ori_d_1"])
+    plt.plot(t,df["ori_p_1"])
+    plt.legend(['d term', 'p term'])
+    plt.grid()
+
+    plt.subplot(3,1,2, sharex=ax1)
+    plt.title("Y ori")
+    plt.plot(t,df["ori_d_2"])
+    plt.plot(t,df["ori_p_2"])
+    plt.legend(['d term', 'p term'])
+    plt.grid()
+
+    plt.subplot(3,1,3, sharex=ax1)
+    plt.title("Z ori")
+    plt.plot(t,df["ori_d_3"])
+    plt.plot(t,df["ori_p_3"])
+    plt.legend(['d term', 'p term'])
+    plt.grid()
+    
+    plt.figure()
+    ax1 = plt.subplot(4,1,1)
+    plt.title("quat w")
+    plt.plot(t,df["quat_w"])
+    plt.grid()
+
+    plt.subplot(4,1,2, sharex=ax1)
+    plt.title("quat x")
+    plt.plot(t,df["quat_x"])
+    plt.grid()
+
+    plt.subplot(4,1,3, sharex=ax1)
+    plt.title("quat y")
+    plt.plot(t,df["quat_y"])
+    plt.grid()
+    
+    plt.subplot(4,1,4, sharex=ax1)
+    plt.title("quat z")
+    plt.plot(t,df["quat_z"])
+    plt.grid()
     
     
+
+
 def simReactionForce(df):
     # Plot gazebo reaction forces against wbc optimal reaction forces 
     
@@ -315,19 +383,21 @@ import matplotlib.pyplot as plt
 
 file_name = 'out'
 # file_name = 'out_hardware_rest'
-# file_name = 'out_without_j_dot'
-# file_name = 'out_with_j_dot'
-# file_name = 'out_300hz_jdot'
-# file_name = 'out_300hz'
-# file_name = 'out_no_LP'
-# file_name = 'out_good'
+
 
 df = pd.DataFrame()
 with np.load(file_name+'.npz') as data:
     for name in list(data.keys()):
-        df[name] = np.array(data[name],dtype='float')
-        
-
+        try:
+            df[name] = np.array(data[name],dtype='float')
+        except:
+            a = np.array(data[name],dtype='float')
+            if a.size > df.shape[0]:
+                a = np.delete(a,-1)
+            else:
+                a = np.append(a,0.0)
+            df[name] = a
+            
 df = df.copy()
 t = df["time_ms"]
 t = t-t[0]
@@ -336,24 +406,23 @@ dt = np.append(np.diff(t),1)
 plt.close('all')
 
 '''Diagnose timing'''
-diagnoseTiming(df)
+# diagnoseTiming(df)
 
 '''Plot solve codes'''
-plt.figure()
-plt.plot(t,df["solve_code"])
+# plt.figure()
+# plt.plot(t,df["solve_code"])
+# plt.legend(["solve codes"])
 
 '''Diagnose contact tasks'''
 # diagnoseContacts(df)
 
 '''Lateral position tracking '''
-xComPosTask(df)
+# xComPosTask(df)
 
 '''Angular velocities'''
 # plt.figure()
-# plt.plot(t,df["ang_vel_2"])
+# plt.plot(t,df["ang_vel_1"])
 
-# plt.figure()
-# plt.plot(t)
 
 '''Compare gazebo reaction forces to wbc'''
 # simReactionForce(df)
@@ -362,36 +431,27 @@ xComPosTask(df)
 # simReactionForceError(df)
 
 '''Optimal motor torques'''
-diagnoseOptimalTorques(df)
+# diagnoseOptimalTorques(df)
 
 '''Time between wbc calls'''
+# plt.figure()
+# plt.plot(t,dt)
+
+'''Measured joint velocities'''
 plt.figure()
-plt.plot(t,dt)
+plt.title("Measured joint velocities")
+for i in range(12):
+    plt.plot(t,df["joint_vel_"+str(i+1)])
 
-
-'''Diagnose ori task'''
+'''Measured joint angles'''
 plt.figure()
-ax1 = plt.subplot(3,1,1)
-plt.title("X ori")
-plt.plot(t,df["ori_d_1"])
-plt.plot(t,df["ori_p_1"])
-plt.legend(['d term', 'p term'])
-plt.grid()
+plt.title("Measured joint angles")
+for i in range(12):
+    plt.plot(t,df["joint_ang_"+str(i+1)])
 
-plt.subplot(3,1,2, sharex=ax1)
-plt.title("Y ori")
-plt.plot(t,df["ori_d_2"])
-plt.plot(t,df["ori_p_2"])
-plt.legend(['d term', 'p term'])
-plt.grid()
-
-plt.subplot(3,1,3, sharex=ax1)
-plt.title("Z ori")
-plt.plot(t,df["ori_d_3"])
-plt.plot(t,df["ori_p_3"])
-plt.legend(['d term', 'p term'])
-plt.grid()
-
+'''Diagnose ori measurements/
+    Diagnose ori weights'''
+OriTask(df)
 
 '''j_dot diagnostics'''
 # # # Plot jdot terms for back left leg z acceleration

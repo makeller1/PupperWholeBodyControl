@@ -6,4 +6,4 @@ PS4_COLOR = {"red": 0, "blue": 0, "green": 255}
 PS4_DEACTIVATED_COLOR = {"red": 0, "blue": 0, "green": 50}
 
 # SERIAL_PORT = "/dev/tty.usbmodem78075901"
-SERIAL_PORT = "/dev/ttyACM0" # Find this name by looking at platformio's monitor output
+SERIAL_PORT = "/dev/ttyACM1" # Find this name by looking at platformio's monitor output

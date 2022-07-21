@@ -142,8 +142,8 @@ void TaskMaster::setGoal(GoalName goal, PupperWBC& WBC_, std::array<bool,4>& fee
                            0.0, -M_PI_4, -M_PI_2,
                            0.0,  M_PI_4,  M_PI_2,
                            0.0, -M_PI_4, -M_PI_2}; 
-            time_init_ms = 3e3; // for sim
-            time_fall_ms = 5e3; // for sim
+            time_init_ms = 4e3; // for sim
+            time_fall_ms = 4e3; // for sim
 
             // WBC parameters
             WBC_.lambda_q = 0.001; 
@@ -166,6 +166,7 @@ void TaskMaster::setGoal(GoalName goal, PupperWBC& WBC_, std::array<bool,4>& fee
             CoM_Height_Task.pos_target << 0, 0, 0.08;
             CoM_Height_Task.Kp << 0,0,100; 
             CoM_Height_Task.Kd << 0,0,10;
+            CoM_Height_Task.offset << -0.07, 0, 0;
 
             // Task for horizontal body position
             static Task CoM_Lateral_Pos_Task;
@@ -181,11 +182,11 @@ void TaskMaster::setGoal(GoalName goal, PupperWBC& WBC_, std::array<bool,4>& fee
             static Task CoM_Orientation_Task;
             CoM_Orientation_Task.type    = BODY_ORI;
             CoM_Orientation_Task.body_id = "bottom_PCB";
-            CoM_Orientation_Task.task_weight = 1.0; // 50, 1.0
+            CoM_Orientation_Task.task_weight = 10; // 1.0 (sim)
             CoM_Orientation_Task.quat_target = Eigen::Quaternion<double>::Identity();
             CoM_Orientation_Task.active_targets = {true, true, true};
-            float com_ori_Kp = 1000; // 1000 (sim)
-            float com_ori_Kd = 10; // 10 (sim)
+            float com_ori_Kp = 100; // 1000 (sim)
+            float com_ori_Kd = 1; // 10 (sim)
             CoM_Orientation_Task.Kp << com_ori_Kp, com_ori_Kp, com_ori_Kp; 
             CoM_Orientation_Task.Kd << com_ori_Kd, com_ori_Kd, com_ori_Kd; 
 

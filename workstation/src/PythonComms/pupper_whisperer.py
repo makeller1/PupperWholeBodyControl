@@ -33,8 +33,7 @@ class whisperer:
         # vel : velocity 12x1 (array)
         # pos : position 12x1 (array)
         # cur : current 12x1 (array)
-        # pref : reference pos 12x1 (array)
-        # lcur : last command 12x1 (array)
+        # cur : last command 12x1 (array)
         # quat : robot orientation wxyz (array)
         # mag : magnitude of normalized magnetometer (float)
         self.robot_states_ = {'pos': [0.0] * 12, 'vel': [0.0] * 12, 'cur': [0.0] * 12, 'quat' : [1.0,0,0,0], 'mag': 1.0}

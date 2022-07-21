@@ -1,7 +1,6 @@
 #pragma once
 
 #include <BasicLinearAlgebra.h>
-
 #include <array>
 
 class Utils {
@@ -31,5 +30,10 @@ class Utils {
 
   template <int N, size_t UN>
   static BLA::Matrix<N> ArrayToVector(std::array<float, UN> arr);
+
+  // start timer (ms)
+  static double tic(int mode=0);
+  // return elapsed time (ms)
+  static double toc();
 };
 

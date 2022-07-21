@@ -17,9 +17,9 @@
             <max_contacts>1</max_contacts>  <!-- NOTE: Speeds simulation up by 2x. Remove for slow motion -->
             <ode>
                 <solver>
-                    <!-- <min_step_size>0.001</min_step_size> -->
+                    <!-- <min_step_size>0.0005</min_step_size> -->
                     <type>quick</type>
-                    <iters>600</iters>
+                    <iters>1200</iters>
                     <sor>0.4</sor>
                 </solver>
 

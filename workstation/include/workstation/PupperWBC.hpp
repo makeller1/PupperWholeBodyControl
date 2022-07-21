@@ -60,11 +60,12 @@ public:
     std::array<float, 12> getOptimalAccel();
 
     // Location of center of foot in lower link coordinates (center of hemisphere face)
-    const RigidBodyDynamics::Math::Vector3d body_contact_point_left =  RigidBodyDynamics::Math::Vector3d(0.0, -.11, 0.0095);
-    const RigidBodyDynamics::Math::Vector3d body_contact_point_right = RigidBodyDynamics::Math::Vector3d(0.0, -.11, -0.0095);
+    const RigidBodyDynamics::Math::Vector3d body_contact_point_left =  RigidBodyDynamics::Math::Vector3d(0.0, -0.0095, -0.11);
+    const RigidBodyDynamics::Math::Vector3d body_contact_point_right = RigidBodyDynamics::Math::Vector3d(0.0,  0.0095, -0.11);
 
     // For tuning and debugging
     void printDiag();
+    void printCOM();
 
     // WBC parameters
     double lambda_q; // Penalizes high joint accelerations (q_ddot^2)

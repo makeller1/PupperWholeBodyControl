@@ -21,6 +21,8 @@ using std::endl;
 using namespace RigidBodyDynamics;
 using namespace RigidBodyDynamics::Math;
 
+#define DEBUG_MODE // Uncomment to print debugging info
+
 #define PRINT_CLEAN(M) cout << #M << ":" << endl; printClean(M);
 
 namespace {
@@ -312,27 +314,65 @@ void PupperWBC::Load(std::string urdf_file_string){
     initConstraintSets_();
 }
 
+void PupperWBC::printCOM(){
+    Vector3d com_location;
+    double model_mass;
+    RigidBodyDynamics::Utils::CalcCenterOfMass(Pupper_,joint_angles_,joint_velocities_,NULL, model_mass, com_location);
+    cout << "Center of mass location: " << com_location.transpose() << endl;
+}
+
 void PupperWBC::Load(Model& m){
     Pupper_ = m;
 
     Pupper_.SetQuaternion(Pupper_.GetBodyId("bottom_PCB"), robot_orientation_, joint_angles_);
     initConstraintSets_();
 
- 
-    //Print model diagnostics
-    // Eigen::Vector3d offset = Eigen::Vector3d::Zero();
-    // cout << "\nAll bodies:" << endl;
-    // for (int i = 0; i < Pupper_.mBodies.size(); i++){
-    //     cout << i << ") Mass of " << Pupper_.GetBodyName(i) << ": " << Pupper_.mBodies[i].mMass << "kg\n";
+    #ifdef DEBUG_MODE
+        //Print model properties in neutral configuration (zero joint angles)
+        Eigen::Vector3d offset = Eigen::Vector3d::Zero();
+        cout << "\nAll bodies:" << endl;
+        for (int i = 0; i < Pupper_.mBodies.size(); i++){
+            cout << i << ") Mass of " << Pupper_.GetBodyName(i) << ": " << Pupper_.mBodies[i].mMass * 1e3 << "g\n";
+            cout << "Inertia (g*mm^2) in COM:\n" << Pupper_.mBodies[i].mInertia * 1e9 << endl;
+            cout << "body COM in Body coord. (mm): \n" << Pupper_.mBodies[i].mCenterOfMass.transpose() * 1e3 << endl << endl;
+            // VectorNd body_coord = CalcBodyToBaseCoordinates(Pupper_, joint_angles_, i, Pupper_.mBodies[i].mCenterOfMass, false);
+            // cout << "body COM in world coord. (mm): \n" << body_coord.transpose() * 1e3 << endl << endl;
+        }
+
+        Vector3d com_location;
+        double model_mass;
+        RigidBodyDynamics::Utils::CalcCenterOfMass(Pupper_,joint_angles_,joint_velocities_,NULL, model_mass, com_location);
+        cout << "Total mass from RBDL: " << model_mass << "\n";
+        cout << "Center of mass location: " << com_location.transpose() << endl;
         
-    //     VectorNd body_coord = CalcBodyToBaseCoordinates(Pupper_, joint_angles_, i, offset, false);
-    //     cout << "  location in base coord.: " << body_coord.transpose() << endl;
-    // }
-    Vector3d com_location;
-    double model_mass;
-    RigidBodyDynamics::Utils::CalcCenterOfMass(Pupper_,joint_angles_,joint_velocities_,NULL, model_mass, com_location);
-    cout << "Total mass from RBDL: " << model_mass << endl;
-    cout << "Center of mass location: " << com_location.transpose() << endl;
+        cout << "GetModelHierarchy: " << endl;
+        cout << RigidBodyDynamics::Utils::GetModelHierarchy(Pupper_) << endl;
+
+        cout << "GetNamedBodyOriginsOverview: " << endl;
+        cout << RigidBodyDynamics::Utils::GetNamedBodyOriginsOverview(Pupper_) << endl;
+
+        // cout << "GetNamedBodyOriginsOverview" << endl;
+        // cout << RigidBodyDynamics::Utils::GetNamedBodyOriginsOverview(Pupper_) << endl;
+
+        // // Print non-linear effects in neutral and standing positions
+        // b_g_.setZero();
+        // NonlinearEffects(Pupper_, joint_angles_, joint_velocities_, b_g_);
+        // cout << "Nonlinear effects (zero joint positions): \n" << b_g_.transpose() << endl;
+        // b_g_.setZero();
+        // joint_angles_ << 0,0,0,0,0,0,
+        //                  0.0,  M_PI_4,  M_PI_2, 
+        //                  0.0, -M_PI_4, -M_PI_2,
+        //                  0.0,  M_PI_4,  M_PI_2,
+        //                  0.0, -M_PI_4, -M_PI_2, 1.0; // Standing joint angles
+        // NonlinearEffects(Pupper_, joint_angles_, joint_velocities_, b_g_);
+        // cout << "Nonlinear effects (standing joint positions): \n" << b_g_.transpose() << endl;
+
+        // // Calculate the mass matrix
+        massMat_.setZero(); // Required!
+        joint_angles_.setZero();
+        CompositeRigidBodyAlgorithm(Pupper_, joint_angles_, massMat_, false);
+        cout << "M: \n" << massMat_ << endl;
+    #endif
 }
 
 
@@ -645,7 +685,8 @@ void PupperWBC::printDiag(){
 
             if (T->type == BODY_ORI){
                 np_logger.logVectorXd("ori_p",-T->Kp.cwiseProduct(quatDiff(T->quat_measured, T->quat_target)));
-                np_logger.logVectorXd("ori_d",-T->Kd.cwiseProduct(taskDerivative_(T) - T->x_ddot_ff));
+                // np_logger.logVectorXd("ori_d",-T->Kd.cwiseProduct(taskDerivative_(T) - T->x_ddot_ff));
+                np_logger.logVectorXd("ori_d",-T->d_ori);
                 // np_logger.
                 // cout << "P: " << T->Kp.cwiseProduct(quatDiff(T->quat_measured, T->quat_target)).transpose() << "\n";
                 // cout << "D: " << T->Kd.cwiseProduct(taskDerivative_(T) - T->x_ddot_ff).transpose() << endl;
@@ -702,7 +743,16 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
         switch(T->type){
             // Note: desired acceleration is -x_ddot_desired
             case BODY_ORI:
-                x_ddot_desired = T->Kp.cwiseProduct(quatDiff(T->quat_measured, T->quat_target)) + T->Kd.cwiseProduct(taskDerivative_(T)) - T->x_ddot_ff;
+                static VectorNd d_ori(3);
+                static VectorNd d_ori_new(3);
+                static const double alpha = 0.87;
+                d_ori_new = T->Kd.cwiseProduct(taskDerivative_(T));
+                if (d_ori_new.norm() > 0.001){
+                    d_ori = d_ori*(alpha) + (1-alpha)*(d_ori_new);
+                }
+                x_ddot_desired = T->Kp.cwiseProduct(quatDiff(T->quat_measured, T->quat_target)) + d_ori - T->x_ddot_ff;
+                // Log
+                T->d_ori = d_ori;
                 break;
 
             case BODY_POS:
@@ -763,16 +813,16 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
             }
 
             // with j_dot_q_dot
-            cost_t_vec += T->task_weight * j.transpose() * (j_dot_q_dot + x_ddot_desired); // nq x 1 
+            // cost_t_vec += T->task_weight * j.transpose() * (j_dot_q_dot + x_ddot_desired); // nq x 1 
         }
         else{
-            // without j_dot_q_dot
-            cost_t_vec += T->task_weight * j.transpose() * x_ddot_desired; // nq x 1
+            // // without j_dot_q_dot
+            // cost_t_vec += T->task_weight * j.transpose() * x_ddot_desired; // nq x 1
         }
 
-        //----------------- WITHOUT j_dot_q_dot -------------
-        // cost_t_vec += T->task_weight * j.transpose() * x_ddot_desired; // nq x 1
-        //---------------------------------------------------
+        // ----------------- WITHOUT j_dot_q_dot -------------
+        cost_t_vec += T->task_weight * j.transpose() * x_ddot_desired; // nq x 1
+        // ---------------------------------------------------
 
         cost_t_mat += T->task_weight * j.transpose() * j; // nq x nq
 
@@ -1054,11 +1104,11 @@ VectorNd PupperWBC::solveQP(int n, int m, MatrixNd &P, c_float *q, MatrixNd &A, 
     osqp_solve(work_);
 
     int solve_status = work_->info->status_val;
-    if (solve_status != 1 && solve_status != 2 && solve_status != -2 && solve_status != -6){
-        string message = "OSQP Solve failed with code: " + std::to_string(solve_status);
-        throw(std::runtime_error(message));
-        // TODO: Engage motor braking
-    }
+    // if (solve_status != 1 && solve_status != 2 && solve_status != -2 && solve_status != -6){
+    //     string message = "OSQP Solve failed with code: " + std::to_string(solve_status);
+    //     throw(std::runtime_error(message));
+    //     // TODO: Engage motor braking
+    // }
 
     // QP solution vector [q_ddot;Fr]
     VectorNd sol(NUM_JOINTS + 12);

@@ -122,15 +122,13 @@ int main(int argc, char** argv){
             static int k = 0;
             k = k + 1;
             auto time_main_loop_start = ros::Time::now().toSec();
-            // Offset the quaternion from our initial state
+            // Zero the orientation to the initial state
             Eigen::Quaterniond correct_quat = initial_quaterion_.conjugate() * robot_quaternion_;
-            // ROS_INFO("Corrected quaternion: [%.2f, (%.2f, %.2f, %.2f)]", 
-            // correct_quat.w(), correct_quat.x(), correct_quat.y(), correct_quat.z());
 
             // Print orientation error
-            VectorNd error3d;
-            error3d = correct_quat.vec() * correct_quat.w()/abs(correct_quat.w());
-            std::cout << "error3d: " << 1000.0 * error3d.transpose() << std::endl;
+            // VectorNd error3d;
+            // error3d = correct_quat.vec() * correct_quat.w()/abs(correct_quat.w());
+            // std::cout << "error3d: " << 100.0 * error3d.transpose() << std::endl;
 
             // Update the robot state
             Eigen::Vector3d ang_velocity; // estimate angular velocity
@@ -191,7 +189,7 @@ int main(int argc, char** argv){
 
             // Shutdown if python node asks
             if (shutdown == true){
-                Pup.np_logger.saveData(); // save test log
+                Pup.np_logger.saveData("out_hardware"); // save test log
                 ros::shutdown();
             }
         }

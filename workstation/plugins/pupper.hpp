@@ -77,13 +77,12 @@ private:
     double simtime_;                            // ms current simulation time
     double last_update_time_;                   // ms used to keep track of update rate
     double update_interval_;                    // ms between each control update loop
-    // common::Time last_update_time_;             // Used to keep track of update rate
-    // common::Time update_interval_;              // Seconds between each control update loop
     std::array<float, ROBOT_NUM_JOINTS> control_torques_;
     void updateController_();
     void applyTorques_();
-    TaskMaster taskmaster_;                     // Sets tasks and updates tasks for a specific goal
-    double start_time;                           // start time of simulation ms
+    float applyLowPass_(float torque, int i); // Low pass filter on torques simulates actuator bandwidth
+    TaskMaster taskmaster_;                                 // Sets tasks and updates tasks for a specific goal
+    double start_time;                                       // start time of simulation ms
 
     // Testing contact forces
     void logContactForces_();

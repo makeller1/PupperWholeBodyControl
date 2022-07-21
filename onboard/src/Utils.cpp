@@ -89,3 +89,19 @@ template std::array<int32_t, 12> Utils::ConvertToFixedPoint(
     std::array<float, 12> in, float factor);
 template std::array<float, 12> Utils::VectorToArray(BLA::Matrix<12> vec);
 template BLA::Matrix<12> Utils::ArrayToVector(std::array<float, 12> arr);
+
+// start timer (ms)
+double Utils::tic(int mode) {
+    static double t_start;
+    
+    if (mode==0)
+        t_start = micros();
+    else {
+        auto t_end = micros();
+        double t_delta = (t_end-t_start)*1E-3;
+        return t_delta;
+    }
+    return 0.0;
+}
+// return elapsed time (ms)
+double Utils::toc() { return tic(1); }
