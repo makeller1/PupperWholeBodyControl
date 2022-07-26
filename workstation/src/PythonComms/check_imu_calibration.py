@@ -61,10 +61,9 @@ def main():
     # Put Pupper into torque control mode (and out of error mode if it is)
     hardware_interface.set_trq_mode()
 
-    # Flush first few messages of serial to receive initial orientation measurement
     for i in range(5):
-        PupComm.store_robot_states(hardware_interface.get_robot_states())
-        time.sleep(.002)
+        while PupComm.store_robot_states(hardware_interface.get_robot_states(), False) is False:
+            continue
 
     # Get initial orientation
     quaternion_init = PupComm.get_pupper_orientation()
@@ -73,25 +72,20 @@ def main():
     hardware_interface.zero_motors() 
     print("Zeroing Done")
 
-    # maintain communication frequency 
-    dt = .002 # 1000hz
-    now = time.time()
     k = 0 # loop counter
     try:
         while True:
-            if time.time() - now >= dt:
-
-                now = time.time()
+            # Read data from pupper
+            new_measurements = PupComm.store_robot_states(hardware_interface.get_robot_states(), False)
+            
+            if new_measurements:
 
                 # Check if the pupper has faulted
                 PupComm.check_errors(False)
 
-                # Read data from pupper
-                PupComm.store_robot_states(hardware_interface.get_robot_states(), False)
-
                 # Print Roll-Pitch-Yaw
                 quaternion = PupComm.get_pupper_orientation()
-                if k%100 == 0:
+                if k%200 == 0:
                     quat_rel = quaternion_relative(quaternion_init,quaternion) #relative quaternion
                     r = Rotation.from_quat([quat_rel[1],quat_rel[2],quat_rel[3],quat_rel[0]])
                     rv = r.as_rotvec()

@@ -10,3 +10,4 @@ workstation/src/PythonComms/KeyboardController/UDPComms/__pycache__/UDPComms.cpy
 workstation/src/PythonComms/debug_*
 workstation/src/PythonComms/scratch_*
 workstation/src/PythonComms/*.pkl
+workstation/src/PythonComms/*.csv

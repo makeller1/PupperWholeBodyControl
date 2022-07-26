@@ -142,8 +142,8 @@ void TaskMaster::setGoal(GoalName goal, PupperWBC& WBC_, std::array<bool,4>& fee
                            0.0, -M_PI_4, -M_PI_2,
                            0.0,  M_PI_4,  M_PI_2,
                            0.0, -M_PI_4, -M_PI_2}; 
-            time_init_ms = 4e3; // for sim
-            time_fall_ms = 4e3; // for sim
+            time_init_ms = 2.0e3; // for sim
+            time_fall_ms = 2.0e3; // for sim
 
             // WBC parameters
             WBC_.lambda_q = 0.001; 
@@ -268,23 +268,11 @@ void TaskMaster::updateGoalTasks(PupperWBC& WBC_, const double& time_ms)
         }
         case GoalName::GETUP:
         {
-            // // Update the desired COM_Position as the average of the support polygon edges (contacts)
-            // double offset = 0.07; // offset in x (m) (.05)
-            // static Vector3_t support_avg_lp; // IIR low pass filtered support average
-            // double lp_coeff = 0.0; // 200 hz cutoff with Ts = 1000 Hz (0.81)
-            // Vector3_t support_avg = Vector3_t::Zero(3); // Instantaneous support average
-            
-            // // Compute average of support polygon edges
-            // support_avg += WBC_.calcBodyPosInBaseCoordinates("back_left_lower_link", WBC_.body_contact_point_left);
-            // support_avg += WBC_.calcBodyPosInBaseCoordinates("back_right_lower_link", WBC_.body_contact_point_right);
-            // support_avg += WBC_.calcBodyPosInBaseCoordinates("front_left_lower_link", WBC_.body_contact_point_left);
-            // support_avg += WBC_.calcBodyPosInBaseCoordinates("front_right_lower_link", WBC_.body_contact_point_right);
-
-            // // Low pass to remove derivative impulses due to moving contacts
-            // support_avg_lp = lp_coeff*support_avg_lp + (1-lp_coeff)*support_avg;
-            
-            // WBC_.getTask("COM_LATERAL_POS")->pos_target(0) = support_avg_lp(0) + offset;
-            // WBC_.getTask("COM_LATERAL_POS")->pos_target(1) = support_avg_lp(1); 
+            // // Oscillate COM height task
+            // if (time_ms >= time_fall_ms){
+            //     float target_height = 0.08 + 0.04*sin(4*(time_ms-time_fall_ms)/1000.0); // 4 Hz (0.25 sec)
+            //     WBC_.getTask("COM_HEIGHT")->pos_target.z() = target_height; 
+            // }
             break;
         }
         case GoalName::STAND:

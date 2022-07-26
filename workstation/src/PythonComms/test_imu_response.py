@@ -69,6 +69,7 @@ hardware_interface.set_trq_mode()
 for i in range(5):
     while PupComm.store_robot_states(hardware_interface.get_robot_states(), False) is False:
         continue
+    
 # Get initial orientation
 quaternion_init = PupComm.get_pupper_orientation()
 quaternion_last = PupComm.get_pupper_orientation()
@@ -181,14 +182,14 @@ try:
     plt.grid()
     plt.xlabel("Time (ms)")
     plt.ylabel("Angle (deg)")
-    plt.legend(["Encoder x"])
+    plt.legend(["IMU x"])
     
     plt.subplot(3,1,2,sharex=ax1)
     plt.plot(results["time (ms)"],results["imu_y (deg)"])
     plt.grid()
     plt.xlabel("Time (ms)")
     plt.ylabel("Angle (deg)")
-    plt.legend(["Encoder y"])
+    plt.legend(["IMU y"])
     
     plt.subplot(3,1,3,sharex=ax1)
     plt.plot(results["time (ms)"],results["encoder (deg)"])

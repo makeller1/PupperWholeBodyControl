@@ -21,7 +21,7 @@ using std::endl;
 using namespace RigidBodyDynamics;
 using namespace RigidBodyDynamics::Math;
 
-#define DEBUG_MODE // Uncomment to print debugging info
+// #define DEBUG_MODE // Uncomment to print debugging info
 
 #define PRINT_CLEAN(M) cout << #M << ":" << endl; printClean(M);
 
@@ -799,8 +799,6 @@ void PupperWBC::formQP(MatrixNd &P, VectorNd &q, MatrixNd &A, VectorNd &l, Vecto
             double delta_t = (now() - t_prev_); // seconds
             if (T->j_prev_updated == true){
                 j_dot = (j - T->j_prev)/delta_t;
-                // cout << "j_dot calculated" << endl;
-                // cout << "delta_t: " << delta_t << endl;
             }
             else{
                 j_dot = MatrixNd::Zero(j.rows(),j.cols());

@@ -107,10 +107,16 @@ def main():
     # Put Pupper into torque control mode
     hardware_interface.set_trq_mode()
 
-    # Flush first few messages of serial to avoid false fault signal
+    # Flush first few messages of serial to avoid false fault signal and get first orientation
     for i in range(5):
-        PupComm.store_robot_states(hardware_interface.get_robot_states())
-        time.sleep(.002)
+        while PupComm.store_robot_states(hardware_interface.get_robot_states(), False) is False:
+            continue
+    
+    # Check for total run time to avoid elusive teensy bug (TODO: troubleshoot bug with CANalyzer)
+    if PupComm.robot_states_['ts'] > 2.5e6:
+        print("Teensy has been running for longer than {:.2f} minutes. Please restart.".format(PupComm.robot_states_['ts']/1000.0/60.0))
+        hardware_interface.serial_handle.close()
+        quit()
 
     # Get initial orientation
     quaternion_init = PupComm.get_pupper_orientation()
@@ -129,10 +135,6 @@ def main():
     try:
         while not rospy.is_shutdown():
             command = joystick_interface.get_command()
-            
-            # #Print states
-            # PupComm.print_states(0)
-            # PupComm.print_states(1)
 
             # Read data from pupper
             PupComm.store_robot_states(hardware_interface.get_robot_states())
@@ -221,10 +223,12 @@ def main():
         hardware_interface.set_torque([0]*12) # Zero torques when quit
         state_msg.position[0] = 0.012345
         state_pub.publish(state_msg)
+        hardware_interface.serial_handle.close()
         rospy.signal_shutdown("Manual stop.")
         print("Stopping motors.")
     finally:
         hardware_interface.set_torque([0]*12) # Zero torques when quit
+        hardware_interface.serial_handle.close()
         print("Stopping motors.")
 
 if __name__ == "__main__":

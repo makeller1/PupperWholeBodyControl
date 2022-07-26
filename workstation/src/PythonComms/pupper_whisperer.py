@@ -90,6 +90,7 @@ class whisperer:
         return [joint_pos, joint_vel, joint_cur]
 
     def get_pupper_orientation(self):
+        # order: w, x, y, z
         if 'quat' in self.robot_states_:
             return self.robot_states_['quat']
         else:
