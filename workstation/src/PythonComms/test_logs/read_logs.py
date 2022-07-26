@@ -5,6 +5,7 @@ Reads logs from the WBC which include the following variables
 time_ms // time when WBC was called
 solve_ms // time required to solve
 tau_i // optimal torques (BL, BR, FL, FR)
+tau_lowpass_i // low passed torques (BL, BR, FL, FR)
 Fr_i // optimal reaction forces
 
 Fr_gazebo_br_i // Gazebo contact forces (bl, br, fl, fr)
@@ -150,6 +151,24 @@ def xComPosTask(df):
     plt.legend(['pos target','pos measured'])
     plt.xlabel('time (ms)')
     plt.grid()
+    
+def heightTask(df):
+    plt.figure()
+    ax1 = plt.subplot(2,1,1)
+    plt.title('COM Height Task')
+    plt.plot(t,df["COM_HEIGHT_acc_opt_1"])
+    plt.plot(t,df["COM_HEIGHT_acc_des_1"])
+    plt.ylabel("COM Height (m)")
+    plt.legend(['optimal acc','desired acc'])
+    plt.grid()
+
+    plt.subplot(2,1,2, sharex = ax1)
+    plt.plot(t,df["COM_HEIGHT_pos_target_3"])
+    plt.plot(t,df["COM_HEIGHT_pos_measured_3"])
+    plt.legend(['pos target','pos measured'])
+    plt.ylabel("COM Height (m)")
+    plt.xlabel('time (ms)')
+    plt.grid()
 
 def OriTask(df):
     plt.figure()
@@ -174,51 +193,65 @@ def OriTask(df):
     plt.legend(['optimal acc','desired acc'])
     plt.grid()
     
+    n = df.shape[0]
+    roll = np.zeros([n,1])
+    pitch = np.zeros([n,1])
+    yaw = np.zeros([n,1])
+    for i in range(df.shape[0]):
+        r = Rotation.from_quat([df["quat_x"][i],df["quat_y"][i],df["quat_z"][i],df["quat_w"][i]])
+        euler = r.as_euler('xyz', degrees=True)
+        roll[i] = euler[0]
+        pitch[i] = euler[1]
+        yaw[i] = euler[2]
+    
     plt.figure()
     ax1 = plt.subplot(3,1,1)
-    plt.title("X ori")
-    plt.plot(t,df["ori_d_1"])
-    plt.plot(t,df["ori_p_1"])
-    plt.legend(['d term', 'p term'])
     plt.grid()
+    plt.plot(t,roll)
+    plt.ylabel("Roll (deg)")
 
     plt.subplot(3,1,2, sharex=ax1)
-    plt.title("Y ori")
-    plt.plot(t,df["ori_d_2"])
-    plt.plot(t,df["ori_p_2"])
-    plt.legend(['d term', 'p term'])
     plt.grid()
-
+    plt.plot(t,pitch)
+    plt.ylabel("Pitch (deg)")
+    
     plt.subplot(3,1,3, sharex=ax1)
-    plt.title("Z ori")
-    plt.plot(t,df["ori_d_3"])
-    plt.plot(t,df["ori_p_3"])
-    plt.legend(['d term', 'p term'])
     plt.grid()
+    plt.plot(t,yaw)
+    plt.ylabel("Yaw (deg)")
+    
+    # plt.figure()
+    # ax1 = plt.subplot(3,1,1)
+    # plt.title("X ori")
+    # plt.plot(t,df["ori_d_1"])
+    # plt.plot(t,df["ori_p_1"])
+    # plt.legend(['d term', 'p term'])
+    # plt.grid()
+
+    # plt.subplot(3,1,2, sharex=ax1)
+    # plt.title("Y ori")
+    # plt.plot(t,df["ori_d_2"])
+    # plt.plot(t,df["ori_p_2"])
+    # plt.legend(['d term', 'p term'])
+    # plt.grid()
+
+    # plt.subplot(3,1,3, sharex=ax1)
+    # plt.title("Z ori")
+    # plt.plot(t,df["ori_d_3"])
+    # plt.plot(t,df["ori_p_3"])
+    # plt.legend(['d term', 'p term'])
+    # plt.grid()
+    
+
+def jointTask(df):
     
     plt.figure()
-    ax1 = plt.subplot(4,1,1)
-    plt.title("quat w")
-    plt.plot(t,df["quat_w"])
+    ax1 = plt.subplot(3,1,1)
+    plt.title('Joint Task')
+    plt.plot(t,df["JOINT_ANGLES_acc_opt_1"])
+    plt.plot(t,df["JOINT_ANGLES_acc_des_1"])
+    plt.legend(['optimal acc','desired acc'])
     plt.grid()
-
-    plt.subplot(4,1,2, sharex=ax1)
-    plt.title("quat x")
-    plt.plot(t,df["quat_x"])
-    plt.grid()
-
-    plt.subplot(4,1,3, sharex=ax1)
-    plt.title("quat y")
-    plt.plot(t,df["quat_y"])
-    plt.grid()
-    
-    plt.subplot(4,1,4, sharex=ax1)
-    plt.title("quat z")
-    plt.plot(t,df["quat_z"])
-    plt.grid()
-    
-    
-
 
 def simReactionForce(df):
     # Plot gazebo reaction forces against wbc optimal reaction forces 
@@ -239,7 +272,8 @@ def simReactionForce(df):
     
     plt.figure()
     ax1 = plt.subplot(4,1,1)
-    plt.title('Back left reaction forces')
+    plt.title("Reaction Forces")
+    plt.ylabel('Back left (N)')
     plt.plot(t,df["Fr_gazebo_bl_1"], color='blue',linestyle='--')
     plt.plot(t,df["Fr_1"], color='blue')
     plt.plot(t,df["Fr_gazebo_bl_2"], color='green',linestyle='--')
@@ -247,10 +281,10 @@ def simReactionForce(df):
     plt.plot(t,df["Fr_gazebo_bl_3"], color='orange',linestyle='--')
     plt.plot(t,df["Fr_3"], color='orange')
     plt.grid()
-    plt.legend(['x gazebo','x wbc','y gazebo','y wbc','z gazebo','z wbc'])
-    
+    plt.legend(['x gazebo','x wbc','y gazebo','y wbc','z gazebo','z wbc'],loc="upper left", ncol=3)
+
     plt.subplot(4,1,2, sharex = ax1)
-    plt.title('Back right reaction forces')
+    plt.ylabel('Back right (N)')
     plt.plot(t,df["Fr_gazebo_br_1"], color='blue',linestyle='--')
     plt.plot(t,df["Fr_4"], color='blue')
     plt.plot(t,df["Fr_gazebo_br_2"], color='green',linestyle='--')
@@ -258,10 +292,9 @@ def simReactionForce(df):
     plt.plot(t,df["Fr_gazebo_br_3"], color='orange',linestyle='--')
     plt.plot(t,df["Fr_6"], color='orange')
     plt.grid()
-    plt.legend(['x gazebo','x wbc','y gazebo','y wbc','z gazebo','z wbc'])
     
     plt.subplot(4,1,3, sharex = ax1)
-    plt.title('Front left reaction forces')
+    plt.ylabel('Front left (N)')
     plt.plot(t,df["Fr_gazebo_fl_1"], color='blue',linestyle='--')
     plt.plot(t,df["Fr_7"], color='blue')
     plt.plot(t,df["Fr_gazebo_fl_2"], color='green',linestyle='--')
@@ -269,18 +302,17 @@ def simReactionForce(df):
     plt.plot(t,df["Fr_gazebo_fl_3"], color='orange',linestyle='--')
     plt.plot(t,df["Fr_9"], color='orange')
     plt.grid()
-    plt.legend(['x gazebo','x wbc','y gazebo','y wbc','z gazebo','z wbc'])
     
     plt.subplot(4,1,4, sharex = ax1)
-    plt.title('Front right reaction forces')
+    plt.ylabel('Front right (N)')
     plt.plot(t,df["Fr_gazebo_fr_1"], color='blue',linestyle='--')
     plt.plot(t,df["Fr_10"], color='blue')
     plt.plot(t,df["Fr_gazebo_fr_2"], color='green',linestyle='--')
     plt.plot(t,df["Fr_11"], color='green')
     plt.plot(t,df["Fr_gazebo_fr_3"], color='orange',linestyle='--')
     plt.plot(t,df["Fr_12"], color='orange')
+    plt.xlabel("time (ms)")
     plt.grid()
-    plt.legend(['x gazebo','x wbc','y gazebo','y wbc','z gazebo','z wbc'])
     
 def simReactionForceError(df):
     # Plot error between Gazebo and wbc reaction forces
@@ -301,7 +333,7 @@ def simReactionForceError(df):
     
     plt.figure()
     ax1 = plt.subplot(4,1,1)
-    plt.title('Back left reaction forcce error')
+    plt.title('Back left reaction force error')
     plt.plot(t,np.abs(df["Fr_1"] - df["Fr_gazebo_bl_1"]), color='blue')
     plt.plot(t,np.abs(df['Fr_2'] - df["Fr_gazebo_bl_2"]), color='green')
     plt.plot(t,np.abs(df['Fr_3'] - df["Fr_gazebo_bl_3"]), color='orange')
@@ -309,7 +341,7 @@ def simReactionForceError(df):
     plt.legend(['x error','y error', 'z error'])
     
     plt.subplot(4,1,2, sharex = ax1)
-    plt.title('Back right reaction forcce error')
+    plt.title('Back right reaction force error')
     plt.plot(t,np.abs(df["Fr_4"] - df["Fr_gazebo_br_1"]), color='blue')
     plt.plot(t,np.abs(df['Fr_5'] - df["Fr_gazebo_br_2"]), color='green')
     plt.plot(t,np.abs(df['Fr_6'] - df["Fr_gazebo_br_3"]), color='orange')
@@ -317,7 +349,7 @@ def simReactionForceError(df):
     plt.legend(['x error','y error', 'z error'])
     
     plt.subplot(4,1,3, sharex = ax1)
-    plt.title('Front left reaction forcce error')
+    plt.title('Front left reaction force error')
     plt.plot(t,np.abs(df["Fr_7"] - df["Fr_gazebo_fl_1"]), color='blue')
     plt.plot(t,np.abs(df['Fr_8'] - df["Fr_gazebo_fl_2"]), color='green')
     plt.plot(t,np.abs(df['Fr_9'] - df["Fr_gazebo_fl_3"]), color='orange')
@@ -325,7 +357,7 @@ def simReactionForceError(df):
     plt.legend(['x error','y error', 'z error'])
     
     plt.subplot(4,1,4, sharex = ax1)
-    plt.title('Front right reaction forcce error')
+    plt.title('Front right reaction force error')
     plt.plot(t,np.abs(df["Fr_10"] - df["Fr_gazebo_fr_1"]), color='blue')
     plt.plot(t,np.abs(df['Fr_11'] - df["Fr_gazebo_fr_2"]), color='green')
     plt.plot(t,np.abs(df['Fr_12'] - df["Fr_gazebo_fr_3"]), color='orange')
@@ -374,12 +406,53 @@ def diagnoseOptimalTorques(df):
     plt.legend(['hip','shoulder','knee'])
     plt.grid()
 
+def diagnoseLowPassTorques(df):
+    plt.figure()
+    plt.suptitle("Low pass motor torques")
+    ax1 = plt.subplot(4,1,1)
+    plt.title('Back left leg')
+    plt.plot(t,df["tau_lowpass_1"])
+    plt.plot(t,df["tau_lowpass_2"])
+    plt.plot(t,df["tau_lowpass_3"])
+    plt.xlabel('time (ms)')
+    plt.ylabel('Torque (Nm)')
+    plt.legend(['hip','shoulder','knee'])
+    plt.grid()
 
-    
+    plt.subplot(4,1,2, sharex = ax1)
+    plt.title('Back right leg')
+    plt.plot(t,df["tau_lowpass_4"])
+    plt.plot(t,df["tau_lowpass_5"])
+    plt.plot(t,df["tau_lowpass_6"])
+    plt.xlabel('time (ms)')
+    plt.ylabel('Torque (Nm)')
+    plt.legend(['hip','shoulder','knee'])
+    plt.grid()
+
+    plt.subplot(4,1,3, sharex = ax1)
+    plt.title('Front left leg')
+    plt.plot(t,df["tau_lowpass_7"])
+    plt.plot(t,df["tau_lowpass_8"])
+    plt.plot(t,df["tau_lowpass_9"])
+    plt.xlabel('time (ms)')
+    plt.ylabel('Torque (Nm)')
+    plt.legend(['hip','shoulder','knee'])
+    plt.grid()
+
+    plt.subplot(4,1,4, sharex = ax1)
+    plt.title('Front right leg')
+    plt.plot(t,df["tau_lowpass_10"])
+    plt.plot(t,df["tau_lowpass_11"])
+    plt.plot(t,df["tau_lowpass_12"])
+    plt.xlabel('time (ms)')
+    plt.ylabel('Torque (Nm)')
+    plt.legend(['hip','shoulder','knee'])
+    plt.grid()
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-
+from scipy.spatial.transform import Rotation 
 
 file_name = 'out'
 # file_name = 'out_hardware_rest'
@@ -413,18 +486,20 @@ plt.close('all')
 # plt.plot(t,df["solve_code"])
 # plt.legend(["solve codes"])
 
-'''Diagnose contact tasks'''
+'''Contact constraint tasks'''
 # diagnoseContacts(df)
 
 '''Lateral position tracking '''
 # xComPosTask(df)
 
-'''Angular velocities'''
+'''Height task'''
+# heightTask(df)
+
+'''Measured body angular velocity'''
 # plt.figure()
 # plt.plot(t,df["ang_vel_1"])
 
-
-'''Compare gazebo reaction forces to wbc'''
+'''Reaction Forces: Compare gazebo reaction forces to wbc'''
 # simReactionForce(df)
 
 '''Plot reaction force error between wbc and gazebo'''
@@ -433,21 +508,24 @@ plt.close('all')
 '''Optimal motor torques'''
 # diagnoseOptimalTorques(df)
 
+'''Low pass motor torques'''
+# diagnoseLowPassTorques(df)
+
 '''Time between wbc calls'''
 # plt.figure()
 # plt.plot(t,dt)
 
 '''Measured joint velocities'''
-plt.figure()
-plt.title("Measured joint velocities")
-for i in range(12):
-    plt.plot(t,df["joint_vel_"+str(i+1)])
+# plt.figure()
+# plt.title("Measured joint velocities")
+# for i in range(12):
+#     plt.plot(t,df["joint_vel_"+str(i+1)])
 
 '''Measured joint angles'''
-plt.figure()
-plt.title("Measured joint angles")
-for i in range(12):
-    plt.plot(t,df["joint_ang_"+str(i+1)])
+# plt.figure()
+# plt.title("Measured joint angles")
+# for i in range(12):
+#     plt.plot(t,df["joint_ang_"+str(i+1)])
 
 '''Diagnose ori measurements/
     Diagnose ori weights'''
@@ -474,5 +552,9 @@ OriTask(df)
 # plt.xlabel('time (ms)')
 # if linestyle == '-':
 #     plt.legend(['j(d hip)','j(d shoulder)','j(d elbow)'])
+
+# plt.figure()
+# plt.plot(t,df["tau_2"])
+# plt.plot(t,df["tau_lowpass_2"])
 
 

@@ -70,6 +70,8 @@ private:
     Eigen::Vector3d body_COM_ang_vel_;
     void updateJoints_();
     void updateBody_();
+    void applyNoise_(); // Corrupt measurements with artificial noise
+    Eigen::Vector3d rpy_noise_ = VectorNd::Zero(3); // (rad) Autocorrelated independent noise states for roll pitch and yaw
 
     // Control
     PupperWBC WBC_;
@@ -83,8 +85,9 @@ private:
     float applyLowPass_(float torque, int i); // Low pass filter on torques simulates actuator bandwidth
     TaskMaster taskmaster_;                                 // Sets tasks and updates tasks for a specific goal
     double start_time;                                       // start time of simulation ms
+    Eigen::VectorXd low_pass_torques_;  // torques after low pass filter
 
-    // Testing contact forces
+    // Analyzing contact forces
     void logContactForces_();
     const std::array<std::string,4> link_names_ = {
     "back_left_lower_link",

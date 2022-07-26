@@ -6,10 +6,11 @@
 #include <math.h>
 #include <string>
 #include <chrono>
+#include <random> // For measurement noise
 
 // #define DEBUG_MODE
-// #define MOTOR_LOW_PASS_ACTIVE
-// #define MEASUREMENT_NOISE_ACTIVE
+#define MOTOR_LOW_PASS_ACTIVE
+#define MEASUREMENT_NOISE_ACTIVE
 
 using std::cout;
 using std::endl;
@@ -103,10 +104,11 @@ void PupperPlugin::Load(physics::ModelPtr _model, sdf::ElementPtr _sdf)
         control_torques_[i] = 0;
     }
 
-    // Resize joint vectors
+    // Resize vectors
     joint_positions_  = Eigen::VectorXd::Zero(ROBOT_NUM_JOINTS);
     joint_velocities_ = Eigen::VectorXd::Zero(ROBOT_NUM_JOINTS);
     body_COM_         = Eigen::VectorXd::Zero(3);
+    low_pass_torques_ = Eigen::VectorXd::Zero(ROBOT_NUM_JOINTS);
 
     //Connect plugin to Gazebo world instance
     this->updateConnection_ = event::Events::ConnectWorldUpdateBegin(std::bind(&PupperPlugin::onUpdate, this, std::placeholders::_1));
@@ -193,6 +195,8 @@ void PupperPlugin::onUpdate(const common::UpdateInfo &_info){
 
         // Log gazebo contact forces 
         logContactForces_();
+        // Log low pass torques
+        WBC_.np_logger.logVectorXd("tau_lowpass",low_pass_torques_);
 
         if ((int)k == 1){
             // do not delay for initialization
@@ -202,11 +206,12 @@ void PupperPlugin::onUpdate(const common::UpdateInfo &_info){
         last_update_time_ = simtime_;
     }
     // Save data to numpy format every second
-    // if ((int)simtime_ % 1000 == 0){
-    if ((int)simtime_ % 20 == 0){
+    if ((int)simtime_ % 1000 == 0){
+    // if ((int)simtime_ % 20 == 0){
         WBC_.np_logger.saveData();
     }
     // This needs to be outside the loop or else the joints will go dead on non-update iterations
+    control_torques_.fill(0.0);
     applyTorques_();
 }
 
@@ -258,7 +263,7 @@ void PupperPlugin::controlAllJoints(vector<float> torques){
 void PupperPlugin::setJointPositions(vector<float> angles){
     for (int i = 0; i < 12; i++){
         double error = angleDiff(angles[i], all_joints_[i]->Position(0));
-        control_torques_[i] = 10*error;
+        control_torques_[i] = 0*error; // 10
     }
 }
 
@@ -267,12 +272,11 @@ void PupperPlugin::setJointPositions(vector<float> angles){
 void PupperPlugin::applyTorques_(){
     for (int i = 0; i < 12; i++){
         float torque_i = control_torques_.at(i);
-        // #ifdef MOTOR_LOW_PASS_ACTIVE
-        //     if (simtime_ >= taskmaster_.time_fall_ms)
-        //         torque_i = applyLowPass_(torque_i,i);
-        // #endif
+        #ifdef MOTOR_LOW_PASS_ACTIVE
+            if (simtime_ >= taskmaster_.time_fall_ms)
+                torque_i = applyLowPass_(torque_i,i);
+        #endif
         all_joints_[i]->SetForce(0, torque_i);
-        // all_joints_[i]->SetForce(0, control_torques_[i]);
 
         // Check for nan
         if (std::isnan(torque_i)){
@@ -281,13 +285,30 @@ void PupperPlugin::applyTorques_(){
     }
 }
 
+// IIR low pass filter to approximate actuator bandwidth
 float PupperPlugin::applyLowPass_(float torque, int i){
-    static std::array<float, 12> low_pass_torques = {0,0,0,0,0,0,0,0,0,0,0,0};
     float dt = 0.001; // Seconds Gazebo physics simulation update rate
-    float motor_bandwidth = 50; // Hz motor bandwidth
-    float alpha = exp(-50*2*M_PI*dt);
-    low_pass_torques.at(i) = (alpha)*low_pass_torques.at(i) + (1-alpha)*torque;
-    return low_pass_torques.at(i);
+    float motor_bandwidth = 17; // 17 Hz motor bandwidth from dynamometer freq. response
+    float alpha = exp(-motor_bandwidth*2*M_PI*dt);
+    low_pass_torques_[i] = (alpha)*low_pass_torques_[i] + (1-alpha)*torque;
+    return low_pass_torques_[i];
+}
+
+void PupperPlugin::applyNoise_(){
+    static std::default_random_engine generator;
+    static std::normal_distribution<double> distribution(0.0,1.0);
+
+    // Corrupt quaternion
+    rpy_noise_[0] = 0.99259*rpy_noise_[0] + 1.945e-04*distribution(generator); // roll
+    rpy_noise_[1] = 0.99259*rpy_noise_[1] + 9.528e-05*distribution(generator); // pitch
+    rpy_noise_[2] = 0.99987*rpy_noise_[2] + 1.274e-04*distribution(generator); // yaw
+
+    Eigen::Matrix3d noise_rotation;
+    noise_rotation = Eigen::AngleAxisd(rpy_noise_[0], Eigen::Vector3d::UnitX())
+                   * Eigen::AngleAxisd(rpy_noise_[1], Eigen::Vector3d::UnitY())
+                   * Eigen::AngleAxisd(rpy_noise_[2], Eigen::Vector3d::UnitZ());
+    
+    body_quat_ = noise_rotation * body_quat_;
 }
 
 // =========================================================================================
@@ -352,6 +373,9 @@ void PupperPlugin::updateBody_(){
 
 // Tell the controller the current state of the robot
 void PupperPlugin::updateController_(){
+    // Corrupt measurements with artificial noise
+    applyNoise_();
+
     body_COM_ang_vel_.setZero(); // Remove effect of body ang. vel. on j_dot_q_dot term
     WBC_.updateController(joint_positions_, joint_velocities_, body_quat_, body_COM_ang_vel_, feet_in_contact_manual,simtime_/1000.0f);
 
@@ -404,45 +428,28 @@ void PupperPlugin::contactCallback_(ConstContactsPtr &_msg){
         "pupper::front_right_lower_link"
     };
     // std::fill(feet_in_contact_.begin(), feet_in_contact_.end(), false);
+    for (size_t i = 0; i<4; i++){
+        contact_forces_body_[i].setZero();
+    }
     for (auto C : _msg->contact()){
         if (C.has_collision1())
-            for (size_t i = 0; i < 4; i++)
-                if (collision_names[i] == C.collision1().substr(0, 30))
-                {
+            // for (size_t i = 0; i < 4; i++)
+            //     if (collision_names[i] == C.collision1().substr(0, 30))
+            //     {
             //         feet_in_contact_[i] = true;
-                    contact_forces_body_[i].setZero();
-                }
+            //         contact_forces_body_[i].setZero();
+            //      }
 
             for (auto W : C.wrench()){
                 // Read topic in terminal: gz topic -e /gazebo/pupper_world/physics/contacts
-                // W.body_1_name().substr
                 for (size_t i = 0; i < 4; i++){
                     if (collision_names[i] == W.body_1_name().substr(0, 30)){
-                        contact_forces_body_[i] << W.body_1_wrench().force().x(), W.body_1_wrench().force().y(), W.body_1_wrench().force().z();
-                        // auto link_ptr = model_->GetLink(link_names_[i]);
-                        // cout << "link_ptr is null?: " << std::to_string(link_ptr == NULL) << endl;
-                        // auto link_pose = link_ptr->WorldPose();
-                        // ignition::math::v6::Vector3d force;
-                        // force.Set(W.body_1_wrench().force().x(), W.body_1_wrench().force().y(), W.body_1_wrench().force().z());
-                        // auto force_world = link_pose.Rot().RotateVectorReverse(force);
-                        // cout << "Body: " << W.body_1_name() << "\n";
-                        // cout << "Force world: " << force_world << endl;
-                        // contact_forces_world_[i] << force_world.X(), force_world.Y(), force_world.Z();
+                        // contact_forces_body_[i] << W.body_1_wrench().force().x(), W.body_1_wrench().force().y(), W.body_1_wrench().force().z();
+                        contact_forces_body_[i](0) += W.body_1_wrench().force().x();
+                        contact_forces_body_[i](1) += W.body_1_wrench().force().y();
+                        contact_forces_body_[i](2) += W.body_1_wrench().force().z();
                     }
-
                 }
-                // auto id = W.body_1_id();
-                // uint32_t id_int = id;
-                // cout << "id from wrench: " << std::to_string(id_int) << endl;
-                // // auto link_ptr = model_->GetLinkById(id_int);
-                // auto link_ptr = model_->GetLink("front_right_lower_link");
-                // cout << "link_ptr is null?: " << std::to_string(link_ptr == NULL) << endl;
-                
-                // cout << "Body: " << W.body_1_name() << "\n";
-                // cout << "Force x:  " << W.body_1_wrench().force().x() << " \n";
-                // cout << "Force y: " << W.body_1_wrench().force().y() << " \n";
-                // cout << "Force z: " << W.body_1_wrench().force().z() << endl;
-                // cout << "Force world: " << force_world << endl;
             }
     }
 
