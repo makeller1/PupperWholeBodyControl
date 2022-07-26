@@ -1,7 +1,7 @@
 #include <iostream>
 #include "workstation/PupperModel.h"
 
-#define DEBUG_MODE // Uncomment to print debug information
+// #define DEBUG_MODE // Uncomment to print debug information
 
 // RBDL Model Notes: 
 // 1.  COM of an added/joined body is described in child frame (the frame of the body which is being added to another body).

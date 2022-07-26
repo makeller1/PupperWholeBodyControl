@@ -22,6 +22,7 @@
   <material name="pink">
     <color rgba="1 0 1 1"/>
   </material>
+  <!-- (g*mm^2) -->
   <!-- +++++++++++++++++++++++++++++++ -->
   <!-- MASS PROPERTIES FROM SOLIDWORKS -->
   <!-- +++++++++++++++++++++++++++++++ -->
@@ -39,8 +40,10 @@
   <!-- ++++++++++++++++++++++++++++++++++++ -->
   <!-- KINEMATIC PROPERTIES FROM SOLIDWORKS -->
   <!-- ++++++++++++++++++++++++++++++++++++ -->
-  <!-- <xacro:property name="back_left_upper_link_relative_origin"> -->
-  <!-- <origin xyz="0.3 0 0" rpy="0 0 0" /> -->
+  <!-- Other origins hard coded ... -->
+  <!-- +++++++++++++++++++ -->
+  <!-- SIMULATION SETTINGS -->
+  <!-- +++++++++++++++++++ -->
   <!-- Connect the plugin -->
   <gazebo>
     <plugin filename="libpupper_plugin.so" name="pupper_plugin"/>
@@ -78,7 +81,7 @@
     <inertial>
       <origin rpy="0 0 0" xyz="-0.029 0.00031 0.0"/>
       <mass value="0.1098"/>
-      <inertia ixx="2.357671e-05" ixy="-3.426e-08" ixz="-1.0000000000000001e-11" iyy="1.2321790000000002e-05" iyz="1.0000000000000001e-11" izz="2.7265990000000002e-05"/>
+      <inertia ixx="0.00282357671" ixy="-3.426e-08" ixz="-1.0000000000000001e-11" iyy="1.2321790000000002e-05" iyz="1.0000000000000001e-11" izz="2.7265990000000002e-05"/>
     </inertial>
     <visual name="back_left_hub_visual">
       <material name="blue"/>
@@ -114,7 +117,7 @@
     <inertial>
       <origin rpy="0 0 0" xyz="-0.00022 -0.01219 -0.033350000000000005"/>
       <mass value="0.021"/>
-      <inertia ixx="4.375377e-05" ixy="1.276e-08" ixz="-3.5976e-07" iyy="4.413815000000001e-05" iyz="4.5647000000000006e-07" izz="8.5689e-07"/>
+      <inertia ixx="4.375377e-05" ixy="1.276e-08" ixz="-3.5976e-07" iyy="0.0028441381500000002" iyz="4.5647000000000006e-07" izz="8.5689e-07"/>
     </inertial>
     <visual>
       <material name="blueGreen"/>
@@ -123,9 +126,15 @@
       </geometry>
     </visual>
     <collision name="back_left_lower_link_collision">
+      <pose>0.0 -0.0095 -0.11 0 0 0</pose>
       <geometry>
-        <mesh filename="package://workstation/pupper_description/Pupper_STL/Leg/assembly_lower_link_left_simplified.dae" scale="1.0 1.0 1.0"/>
+        <sphere>
+          <radius>0.0095</radius>
+        </sphere>
       </geometry>
+      <!-- <geometry> -->
+      <!--     <mesh filename = "${CollisionPath}/Leg/assembly_lower_link_left_simplified.dae" scale = "${meshScale_meters}"/> -->
+      <!--  </geometry> -->
     </collision>
   </link>
   <gazebo reference="back_left_lower_link">
@@ -134,7 +143,9 @@
         <contact>
           <ode>
             <kp>1e15</kp>
-            <kd>1e13</kd>
+            <!-- 1e15 -->
+            <kd>1</kd>
+            <!-- 1e13 -->
             <!-- <min_depth>0.01</min_depth> -->
           </ode>
         </contact>
@@ -156,7 +167,7 @@
     <origin rpy="0 0 0" xyz="-0.122 0.047 0.043500000000000004"/>
     <!-- transformation from parent origin to child origin -->
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.01" friction="0.0001"/>
+    <dynamics damping="0.001" friction="0.17"/>
     <axis xyz="-1 0 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -181,7 +192,7 @@
     <origin rpy="0 0 0" xyz="-0.0315 0.0215 0"/>
     <!-- transformation from parent origin to child origin -->
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.01" friction="0.0001"/>
+    <dynamics damping="0.001" friction="0.17"/>
     <axis xyz="0 1 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -206,7 +217,7 @@
     <origin rpy="0 0 0" xyz="0 0.023 -0.080"/>
     <!-- transformation from parent origin to child origin -->
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.01" friction="0.0001"/>
+    <dynamics damping="0.001" friction="0.17"/>
     <axis xyz="0 -1 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -227,7 +238,7 @@
     <inertial>
       <origin rpy="0 0 0" xyz="-0.029 -0.00031 0.0"/>
       <mass value="0.1098"/>
-      <inertia ixx="2.357671e-05" ixy="-3.426e-08" ixz="-1.0000000000000001e-11" iyy="1.2321790000000002e-05" iyz="-2.0000000000000002e-11" izz="2.7265990000000002e-05"/>
+      <inertia ixx="0.00282357671" ixy="-3.426e-08" ixz="-1.0000000000000001e-11" iyy="1.2321790000000002e-05" iyz="-2.0000000000000002e-11" izz="2.7265990000000002e-05"/>
     </inertial>
     <visual name="back_right_hub_visual">
       <material name="blue"/>
@@ -263,7 +274,7 @@
     <inertial>
       <origin rpy="0 0 0" xyz="-0.00022 0.01219 -0.033350000000000005"/>
       <mass value="0.021"/>
-      <inertia ixx="4.375305e-05" ixy="-1.274e-08" ixz="-3.6013000000000004e-07" iyy="4.4137540000000005e-05" iyz="-4.5513e-07" izz="8.568200000000001e-07"/>
+      <inertia ixx="4.375305e-05" ixy="-1.274e-08" ixz="-3.6013000000000004e-07" iyy="0.00284413754" iyz="-4.5513e-07" izz="8.568200000000001e-07"/>
     </inertial>
     <visual>
       <material name="blueGreen"/>
@@ -274,6 +285,7 @@
     <collision name="back_right_lower_link_collision">
       <geometry>
         <mesh filename="package://workstation/pupper_description/Pupper_STL/Leg/assembly_lower_link_right_simplified.dae" scale="1.0 1.0 1.0"/>
+        <!-- <mesh filename = "${CollisionPath}/Leg/assembly_lower_link_right_STL.stl" scale = "${meshScale_meters}"/> -->
       </geometry>
     </collision>
   </link>
@@ -283,8 +295,9 @@
         <contact>
           <ode>
             <kp>1e15</kp>
-            <kd>1e13</kd>
-            <!-- <min_depth>0.01</min_depth> -->
+            <!-- 1e15 -->
+            <kd>1</kd>
+            <!-- 1e13 -->
           </ode>
         </contact>
         <friction>
@@ -305,7 +318,7 @@
     <origin rpy="0 0 0" xyz="-0.122 -0.047 0.0435"/>
     <!-- transformation from parent origin to child origin -->
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.01" friction="0.0001"/>
+    <dynamics damping="0.001" friction="0.17"/>
     <axis xyz="-1 0 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -330,7 +343,7 @@
     <origin rpy="0 0 0" xyz="-0.0315 -0.0215 0"/>
     <!-- transformation from parent origin to child origin -->
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.01" friction="0.0001"/>
+    <dynamics damping="0.001" friction="0.17"/>
     <axis xyz="0 -1 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -355,7 +368,7 @@
     <origin rpy="0 0 0" xyz="0 -0.023 -0.080"/>
     <!-- transformation from parent origin to child origin -->
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.01" friction="0.0001"/>
+    <dynamics damping="0.001" friction="0.17"/>
     <axis xyz="0 1 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -376,7 +389,7 @@
     <inertial>
       <origin rpy="0 0 0" xyz="-0.029 0.00031 0.0"/>
       <mass value="0.1098"/>
-      <inertia ixx="2.357671e-05" ixy="-3.426e-08" ixz="-1.0000000000000001e-11" iyy="1.2321790000000002e-05" iyz="1.0000000000000001e-11" izz="2.7265990000000002e-05"/>
+      <inertia ixx="0.00282357671" ixy="-3.426e-08" ixz="-1.0000000000000001e-11" iyy="1.2321790000000002e-05" iyz="1.0000000000000001e-11" izz="2.7265990000000002e-05"/>
     </inertial>
     <visual name="front_left_hub_visual">
       <material name="blue"/>
@@ -412,7 +425,7 @@
     <inertial>
       <origin rpy="0 0 0" xyz="-0.00022 -0.01219 -0.033350000000000005"/>
       <mass value="0.021"/>
-      <inertia ixx="4.375377e-05" ixy="1.276e-08" ixz="-3.5976e-07" iyy="4.413815000000001e-05" iyz="4.5647000000000006e-07" izz="8.5689e-07"/>
+      <inertia ixx="4.375377e-05" ixy="1.276e-08" ixz="-3.5976e-07" iyy="0.0028441381500000002" iyz="4.5647000000000006e-07" izz="8.5689e-07"/>
     </inertial>
     <visual>
       <material name="blueGreen"/>
@@ -421,9 +434,15 @@
       </geometry>
     </visual>
     <collision name="front_left_lower_link_collision">
+      <pose>0.0 -0.0095 -0.11 0 0 0</pose>
       <geometry>
-        <mesh filename="package://workstation/pupper_description/Pupper_STL/Leg/assembly_lower_link_left_simplified.dae" scale="1.0 1.0 1.0"/>
+        <sphere>
+          <radius>0.0095</radius>
+        </sphere>
       </geometry>
+      <!-- <geometry> -->
+      <!--     <mesh filename = "${CollisionPath}/Leg/assembly_lower_link_left_simplified.dae" scale = "${meshScale_meters}"/> -->
+      <!--  </geometry> -->
     </collision>
   </link>
   <gazebo reference="front_left_lower_link">
@@ -432,7 +451,9 @@
         <contact>
           <ode>
             <kp>1e15</kp>
-            <kd>1e13</kd>
+            <!-- 1e15 -->
+            <kd>1</kd>
+            <!-- 1e13 -->
             <!-- <min_depth>0.01</min_depth> -->
           </ode>
         </contact>
@@ -454,7 +475,7 @@
     <origin rpy="0 0 0" xyz="0.078 0.047 0.0435"/>
     <!-- transformation from parent origin to child origin -->
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.01" friction="0.0001"/>
+    <dynamics damping="0.001" friction="0.17"/>
     <axis xyz="-1 0 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -479,7 +500,7 @@
     <origin rpy="0 0 0" xyz="-0.0315 0.0215 0"/>
     <!-- transformation from parent origin to child origin -->
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.01" friction="0.0001"/>
+    <dynamics damping="0.001" friction="0.17"/>
     <axis xyz="0 1 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -504,7 +525,7 @@
     <origin rpy="0 0 0" xyz="0 0.023 -0.080"/>
     <!-- transformation from parent origin to child origin -->
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.01" friction="0.0001"/>
+    <dynamics damping="0.001" friction="0.17"/>
     <axis xyz="0 -1 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -525,7 +546,7 @@
     <inertial>
       <origin rpy="0 0 0" xyz="-0.029 -0.00031 0.0"/>
       <mass value="0.1098"/>
-      <inertia ixx="2.357671e-05" ixy="-3.426e-08" ixz="-1.0000000000000001e-11" iyy="1.2321790000000002e-05" iyz="-2.0000000000000002e-11" izz="2.7265990000000002e-05"/>
+      <inertia ixx="0.00282357671" ixy="-3.426e-08" ixz="-1.0000000000000001e-11" iyy="1.2321790000000002e-05" iyz="-2.0000000000000002e-11" izz="2.7265990000000002e-05"/>
     </inertial>
     <visual name="front_right_hub_visual">
       <material name="blue"/>
@@ -561,7 +582,7 @@
     <inertial>
       <origin rpy="0 0 0" xyz="-0.00022 0.01219 -0.033350000000000005"/>
       <mass value="0.021"/>
-      <inertia ixx="4.375305e-05" ixy="-1.274e-08" ixz="-3.6013000000000004e-07" iyy="4.4137540000000005e-05" iyz="-4.5513e-07" izz="8.568200000000001e-07"/>
+      <inertia ixx="4.375305e-05" ixy="-1.274e-08" ixz="-3.6013000000000004e-07" iyy="0.00284413754" iyz="-4.5513e-07" izz="8.568200000000001e-07"/>
     </inertial>
     <visual>
       <material name="blueGreen"/>
@@ -572,6 +593,7 @@
     <collision name="front_right_lower_link_collision">
       <geometry>
         <mesh filename="package://workstation/pupper_description/Pupper_STL/Leg/assembly_lower_link_right_simplified.dae" scale="1.0 1.0 1.0"/>
+        <!-- <mesh filename = "${CollisionPath}/Leg/assembly_lower_link_right_STL.stl" scale = "${meshScale_meters}"/> -->
       </geometry>
     </collision>
   </link>
@@ -581,8 +603,9 @@
         <contact>
           <ode>
             <kp>1e15</kp>
-            <kd>1e13</kd>
-            <!-- <min_depth>0.01</min_depth> -->
+            <!-- 1e15 -->
+            <kd>1</kd>
+            <!-- 1e13 -->
           </ode>
         </contact>
         <friction>
@@ -603,7 +626,7 @@
     <origin rpy="0 0 0" xyz="0.078 -0.047 0.0435"/>
     <!-- transformation from parent origin to child origin -->
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.01" friction="0.0001"/>
+    <dynamics damping="0.001" friction="0.17"/>
     <axis xyz="-1 0 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -628,7 +651,7 @@
     <origin rpy="0 0 0" xyz="-0.0315 -0.0215 0"/>
     <!-- transformation from parent origin to child origin -->
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.01" friction="0.0001"/>
+    <dynamics damping="0.001" friction="0.17"/>
     <axis xyz="0 -1 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->
@@ -653,7 +676,7 @@
     <origin rpy="0 0 0" xyz="0 -0.023 -0.080"/>
     <!-- transformation from parent origin to child origin -->
     <limit effort="1e6" lower="-1e10" upper="1e10" velocity="1e6"/>
-    <dynamics damping="0.01" friction="0.0001"/>
+    <dynamics damping="0.001" friction="0.17"/>
     <axis xyz="0 1 0"/>
   </joint>
   <!-- implicitSpringDamper: prevent crashing when damping is set -->

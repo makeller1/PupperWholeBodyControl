@@ -31,11 +31,11 @@
                 </geometry>  
             </visual>
 
-            <collision name = "${hubName}_collision">
+            <!-- <collision name = "${hubName}_collision">
                 <geometry>
                     <mesh filename = "${CollisionPath}/Leg/assembly_hip_left_simplified.dae" scale = "${meshScale_meters}"/>
                 </geometry>
-            </collision>
+            </collision> -->
             </xacro:if>
         </link>
 
@@ -64,9 +64,13 @@
             </visual>
 
             <collision name = "${upperName}_collision">
+                <origin xyz = "0.0 0.0233 -0.080" rpy = "${PI/2} 0 0"/>
                 <geometry>
-                    <mesh filename = "${CollisionPath}/Leg/assembly_upper_link_left_simplified.dae" scale = "${meshScale_meters}"/>
+                    <cylinder radius = "0.0095" length = "0.045"/>
                 </geometry>
+                <!-- <geometry>
+                    <mesh filename = "${CollisionPath}/Leg/assembly_upper_link_left_simplified.dae" scale = "${meshScale_meters}"/>
+                </geometry> -->
             </collision>
             </xacro:if>
         </link>
@@ -97,9 +101,13 @@
             </visual>
 
             <collision name = "${lowerName}_collision">
+                <origin xyz = "0.0 -0.0095 -.11" />
                 <geometry>
-                    <mesh filename = "${CollisionPath}/Leg/assembly_lower_link_left_simplified.dae" scale = "${meshScale_meters}"/>
+                    <box size = "0.00001 0.00001 0.00001"/>
                 </geometry>
+                <!-- <geometry> -->
+                <!--     <mesh filename = "${CollisionPath}/Leg/assembly_lower_link_left_simplified.dae" scale = "${meshScale_meters}"/> -->
+                <!--  </geometry> -->
             </collision>
             </xacro:if>
         </link>
@@ -110,9 +118,8 @@
                 <surface>
                     <contact>
                         <ode>
-                            <xacro:insert_block name = "contact_kp" /> <!-- <kp>1e15</kp> -->
-                            <xacro:insert_block name = "contact_kd" /> <!-- <kd>1e13</kd> -->
-                            <!-- <min_depth>0.01</min_depth> -->
+                            <xacro:insert_block name = "contact_kp" />
+                            <xacro:insert_block name = "contact_kd" />
                         </ode>
                     </contact>
                     <friction>

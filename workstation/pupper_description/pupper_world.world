@@ -12,21 +12,23 @@
         </gravity>
         <physics name="ode_100iters" type="ode" default="true">
             <type>ode</type>
-            <!-- <max_step_size>0.001</max_step_size> -->
+            <max_step_size>0.0005</max_step_size>
             <real_time_update_rate>1000</real_time_update_rate>
-            <max_contacts>1</max_contacts>  <!-- NOTE: Speeds simulation up by 2x. Remove for slow motion -->
+            <max_contacts>4</max_contacts> 
             <ode>
+
                 <solver>
-                    <!-- <min_step_size>0.0005</min_step_size> -->
                     <type>quick</type>
-                    <iters>1200</iters>
+                    <iters>50</iters>
                     <sor>0.4</sor>
                 </solver>
 
                 <constraints>
-                    <contact_max_correcting_vel>10</contact_max_correcting_vel>
+                    <cfm>0.0</cfm>
+                    <contact_max_correcting_vel>1000</contact_max_correcting_vel>
                     <contact_surface_layer>0.001</contact_surface_layer>
                 </constraints>
+
             </ode>
         </physics>
     </world>

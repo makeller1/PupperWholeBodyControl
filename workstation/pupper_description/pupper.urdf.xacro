@@ -173,13 +173,13 @@
     <!-- +++++++++++++++++++ -->
 
     <xacro:property name = "contact_kp">
-        <kp>1e15</kp>
+        <kp>1e6</kp> 
     </xacro:property>
     <xacro:property name = "contact_kd">
-        <kp>1.5e14</kp>
+        <kd>1</kd>
     </xacro:property>
     <xacro:property name = "joint_friction">
-        <dynamics damping = "0.01" friction = "0.0001"/>
+        <dynamics damping = "0.001" friction = "0.17"/>
     </xacro:property>
     <!-- Connect the plugin -->
     <gazebo>
@@ -213,9 +213,13 @@
         </visual>
 
         <collision name = "bottom_PCB_collision">
+            <origin xyz = "0.0 0.0 0.04355" rpy = "0 0 0"/>
             <geometry>
-                <mesh filename = "${CollisionPath}/Body/assembly_body_simplified.dae" scale = "${meshScale_meters}"/>
+                <box size = "0.264 0.124 0.0901"/>
             </geometry>
+            <!-- <geometry>
+                <mesh filename = "${CollisionPath}/Body/assembly_body_simplified.dae" scale = "${meshScale_meters}"/>
+            </geometry> -->
         </collision>
         </xacro:if>
     </link>
